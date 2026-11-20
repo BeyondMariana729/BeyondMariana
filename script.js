@@ -8,6 +8,8 @@
    Levels:
      Level 1 "Arctic Trench" -> world.js  (buildLevel1, unverändert)
      Level 2 "Coral Reef"    -> level2.js (buildLevel2)
+   Level 2 wird freigeschaltet, sobald eine Tour in Level 1 abgerechnet wurde:
+     localStorage 'beyondMariana_level2Unlocked' = 'true'  (bleibt dauerhaft)
    Beim Levelwechsel werden Touristen, U-Boot, Level UND die komplette
    Szene (Geometrien, Materialien, Texturen) entsorgt.
 
@@ -125,6 +127,22 @@
    } catch (e) { /* ignorieren */ }
    function saveGame() {
      try { localStorage.setItem(SAVE_KEY, JSON.stringify({ money, owned })); } catch (e) { /* ignorieren */ }
+   }
+   
+   /* ------------------------------------------------------------
+      Level-2-Freischaltung (dauerhaft in localStorage)
+      ------------------------------------------------------------ */
+   const LEVEL2_KEY = 'beyondMariana_level2Unlocked';
+   let level2Unlocked = false;
+   try { level2Unlocked = localStorage.getItem(LEVEL2_KEY) === 'true'; } catch (e) { /* ignorieren */ }
+   if (UI.isLevel2Unlocked()) level2Unlocked = true;   // z. B. alter Spielstand aus ui.js
+   
+   function unlockLevel2() {
+     if (level2Unlocked) return false;
+     level2Unlocked = true;
+     try { localStorage.setItem(LEVEL2_KEY, 'true'); } catch (e) { /* ignorieren */ }
+     UI.setLevel2Unlocked(true);
+     return true;
    }
    
    /* ------------------------------------------------------------
@@ -673,7 +691,7 @@
      camera.far = worldCfg.cameraFar;
      camera.updateProjectionMatrix();
      sightMeta = level.meta || DEFAULT_SIGHT_META;
-     UI.setSightIcons(sightMeta.icons);
+     UI.setSightIcons(sightMeta.icons);          // HUD-Symbole: Level 1 oder Level 2
    
      level.setViewDistance(UI.settings.view);
      sub = createSub();
@@ -734,13 +752,18 @@
      const rating = tourists ? tourists.averageRating() : lastRating;
      const fare = TICKET_PER_SIGHT * 3 + Math.round(Math.max(0, rating - 3) * STAR_BONUS);
      addMoney(fare);
+   
+     // Level 1 abgeschlossen -> Level 2 dauerhaft freischalten
+     let newUnlock = false;
+     if (currentLevelId === 1) newUnlock = unlockLevel2();
+   
      sub.setLight(false);
      sub.setParty(false);
      UI.setButtonState('light', false);
      UI.showHigh(null);
      releaseInputs();
      if (mode !== 'ext') setCameraMode('ext', true);
-     UI.showResult({ rating, earned: tourEarned, money, owned: Object.assign({}, owned) });
+     UI.showResult({ rating, earned: tourEarned, money, owned: Object.assign({}, owned), newUnlock });
    }
    
    function buyUpgrade(id) {
@@ -1173,7 +1196,12 @@
    if (btnMenu) btnMenu.style.display = 'none';
    
    UI.initUI({
-     onStartLevel: (id) => { currentLevelId = (id === 2) ? 2 : 1; startLevel(); },   // Level-Auswahl: 1 = world.js, 2 = level2.js
+     // Level-Auswahl: 1 = world.js, 2 = level2.js (nur wenn freigeschaltet)
+     onStartLevel: (id) => {
+       if (id === 2 && !level2Unlocked) return;
+       currentLevelId = (id === 2) ? 2 : 1;
+       startLevel();
+     },
      onResume: () => {
        releaseInputs();
        document.body.style.touchAction = 'none';
@@ -1198,12 +1226,16 @@
      }
    });
    
+   // gespeicherten Stand an die Level-Auswahl geben: Level 2 bleibt nach dem Neuladen freigeschaltet
+   UI.setLevel2Unlocked(level2Unlocked);
+   
    requestAnimationFrame(frame);
    focusCanvas();
    
    // Debug-Hilfe für die Konsole:
    //   BEYOND.visitAll()                   → alle 3 Sehenswürdigkeiten sofort abhaken
    //   BEYOND.addMoney(500)                → Geld für den Shop
+   //   BEYOND.unlockLevel2()               → Level 2 sofort freischalten (wird gespeichert)
    //   BEYOND.tourists.buyPills()          → Rausch auslösen
    //   BEYOND.tourists.tourists[0].startTrip() → ein Tourist geht sofort aufs Klo
    //   BEYOND.resetSave()                  → Geld + Upgrades löschen
@@ -1213,8 +1245,10 @@
      get tourists() { return tourists; },
      get onToilet() { return onToilet; },
      get levelId() { return currentLevelId; },
+     get level2Unlocked() { return level2Unlocked; },
      visitAll() { if (level) level.visitAll(); },
      addMoney(n) { addMoney(n || 100); },
+     unlockLevel2() { return unlockLevel2(); },
      resetSave() {
        money = 0; owned.golden = owned.fog = owned.flood = false; saveGame(); applyUpgrades();
        UI.updateMoney(0, 0);
