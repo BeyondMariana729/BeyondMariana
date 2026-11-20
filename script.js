@@ -5,7 +5,13 @@
    Greifarm, Sauerstoff, 3 Sehenswürdigkeiten, Bord-WC (Spieler sitzt wirklich),
    Touristen (tourists.js), Live-Bewertung + Geld, Tour-Abrechnung + Shop.
 
-   Passt zu: index.html, ui.js, world.js, sub.js, tourists.js
+   Levels:
+     Level 1 "Arctic Trench" -> world.js  (buildLevel1, unverändert)
+     Level 2 "Coral Reef"    -> level2.js (buildLevel2)
+   Beim Levelwechsel werden Touristen, U-Boot, Level UND die komplette
+   Szene (Geometrien, Materialien, Texturen) entsorgt.
+
+   Passt zu: index.html, ui.js, world.js, level2.js, sub.js, tourists.js
    Steuerung (Tastatur):
      W/S  vor/zurück (im U-Boot: Gas) · A/D lenken (beim Laufen: seitwärts)
      Leertaste hoch · Shift runter (beim Laufen: Shift = rennen)
@@ -22,6 +28,7 @@
    import * as THREE from 'three';
    import { createSub, SUB } from './sub.js';
    import { buildLevel1, WORLD } from './world.js';
+   import { buildLevel2, WORLD2 } from './level2.js';
    import { createTourists } from './tourists.js';
    import * as UI from './ui.js';
    
@@ -91,6 +98,16 @@
    const PILLS_COOLDOWN = 24;       // Sekunden
    const CHAMPAGNE_COOLDOWN = 8;
    const FISH_MIN_SIZE = 2.3;       // ab dieser Länge reagieren Touristen auf Fische
+   const SHOCK_TIME = 1.8;          // Quallen-Schock (Sekunden)
+   
+   /* Level-2-Sehenswürdigkeiten -> Reaktionen, die tourists.js schon kennt */
+   const TOUR_KIND = { arch: 'cathedral', treasure: 'wreck', shark: 'whale' };
+   
+   /* Standard-Symbole/-Namen (Level 1) */
+   const DEFAULT_SIGHT_META = {
+     icons: ['🚢', '💎', '🐋'],
+     names: { de: ['Wrack', 'Kathedrale', 'Riesenwal'], en: ['Wreck', 'Cathedral', 'Giant whale'] }
+   };
    
    /* ------------------------------------------------------------
       Speicherstand: Geld + Upgrades (bleiben zwischen den Touren)
@@ -203,6 +220,11 @@
    let sub = null;
    let tourists = null;
    let running = false;
+   
+   let currentLevelId = 1;      // 1 = Arctic Trench (world.js), 2 = Coral Reef (level2.js)
+   let worldCfg = WORLD;
+   let sightMeta = DEFAULT_SIGHT_META;
+   let shockT = 0;              // Quallen-Schock
    
    let mode = 'ext';            // 'ext' | 'cockpit' | 'walk'
    let snapCam = true;
@@ -574,6 +596,24 @@
    /* ------------------------------------------------------------
       Level starten / aufräumen
       ------------------------------------------------------------ */
+   
+   /* Entsorgt ALLES, was noch in der Szene hängt (Geometrien, Materialien, Texturen) */
+   function purgeScene(sc) {
+     if (!sc) return;
+     sc.traverse((o) => {
+       if (o.geometry && o.geometry.dispose) o.geometry.dispose();
+       const mats = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
+       mats.forEach((m) => {
+         for (const k in m) { const v = m[k]; if (v && v.isTexture) v.dispose(); }
+         m.dispose();
+       });
+       if (o.isInstancedMesh && o.dispose) o.dispose();
+     });
+     sc.fog = null;
+     sc.background = null;
+     sc.clear();
+   }
+   
    function disposeLevel() {
      running = false;
      onToilet = false;
@@ -584,8 +624,10 @@
        tourists = null;
      }
      if (sub) { sub.dispose(); sub = null; }
-     if (level) { level.dispose(); level = null; }
+     if (level) { try { level.dispose(); } catch (err) { console.error(err); } level = null; }
+     purgeScene(scene);
      scene = null;
+     renderer.renderLists.dispose();
    }
    
    function resetState() {
@@ -594,7 +636,7 @@
      pitch = 0; yawVel = 0;
      thrS = steerS = vertS = 0;
      o2 = 1; o2LowShown = false; o2Charging = false; darkShown = false;
-     lastNear = null; bumpCd = 0;
+     lastNear = null; bumpCd = 0; shockT = 0;
      allSights = false; settled = false; tourEarned = 0; lastRating = 4;
      barCd.pills = 0; barCd.champagne = 0;
      onToilet = false; fishWatchT = 0; fishInside = new WeakSet();
@@ -605,7 +647,10 @@
      sub.group.position.copy(level.spawn.position);
      sub.group.rotation.set(0, yaw, 0, 'YXZ');
      sub.group.updateMatrixWorld(true);
-     sub.updateDisplays({ lang: UI.settings.lang, money, rating: lastRating });
+     sub.updateDisplays({
+       lang: UI.settings.lang, money, rating: lastRating,
+       sightIcons: sightMeta.icons, sightNames: sightMeta.names[UI.settings.lang] || sightMeta.names.de
+     });
      applyUpgrades();
      mode = 'ext';
      sub.setCaptainVisible(true);
@@ -618,7 +663,18 @@
    
    function buildGame() {
      scene = new THREE.Scene();
-     level = buildLevel1(scene, renderer);
+     if (currentLevelId === 2) {
+       level = buildLevel2(scene, renderer);
+       worldCfg = WORLD2;
+     } else {
+       level = buildLevel1(scene, renderer);
+       worldCfg = WORLD;
+     }
+     camera.far = worldCfg.cameraFar;
+     camera.updateProjectionMatrix();
+     sightMeta = level.meta || DEFAULT_SIGHT_META;
+     UI.setSightIcons(sightMeta.icons);
+   
      level.setViewDistance(UI.settings.view);
      sub = createSub();
      scene.add(sub.group);
@@ -658,7 +714,7 @@
      UI.setTouchVisible(UI.isTouchDevice());
      if (btnMenu) btnMenu.style.display = '';
      UI.showMessage(T('loading'), null, 5000);
-     disposeLevel();
+     disposeLevel();                 // altes Level + Touristen + U-Boot + Szene komplett entsorgen
      releaseInputs();
      setTimeout(() => {
        try {
@@ -756,6 +812,14 @@
      level.collideSub(p, _zeroVel, 1.2);
    }
    
+   function applyShake() {
+     if (shockT <= 0) return;
+     const a = 0.5 * clamp(shockT / SHOCK_TIME, 0, 1);
+     camera.position.x += (Math.random() - 0.5) * a;
+     camera.position.y += (Math.random() - 0.5) * a;
+     camera.position.z += (Math.random() - 0.5) * a;
+   }
+   
    function updateCamera(dt) {
      const g = sub.group;
      g.updateMatrixWorld(true);
@@ -773,6 +837,7 @@
        _camLook.y += 1.0;
        camera.lookAt(_camLook);
        eyeLocal.copy(SUB.seatEye);
+       applyShake();
        return;
      }
    
@@ -787,12 +852,13 @@
      camera.position.copy(_v);
      _q.setFromEuler(_e.set(lookPitch, lookYaw, 0, 'YXZ'));
      camera.quaternion.copy(g.quaternion).multiply(_q);
+     applyShake();
    }
    
    /* ------------------------------------------------------------
       Tiere vor der Glaskuppel -> Touristen jubeln
-      Prüft direkt die Listen aus world.js: Schwarmfische, Belugas/Narwale,
-      Rochen und Quallen (lokal z -3.5 … -16 vor dem Cockpit).
+      Prüft direkt die Listen aus dem Level: Schwarmfische, Belugas/Schildkröten/Haie,
+      Rochen/Mantas und Quallen (lokal z -3.5 … -16 vor dem Cockpit).
       ------------------------------------------------------------ */
    function testCreature(key, p, g, sp) {
      if (p.distanceToSquared(sp) > 900) { if (fishInside.has(key)) fishInside.delete(key); return; }
@@ -840,12 +906,23 @@
            UI.flash();
            sub.grab();
            UI.showMessage('msgSight_' + ev.kind, { n: ev.count }, 5000);
-           later.push({ t: simTime + 0.8, fn: () => tEvent('sight', { kind: ev.kind }) });
+           later.push({ t: simTime + 0.8, fn: () => tEvent('sight', { kind: TOUR_KIND[ev.kind] || ev.kind }) });
            break;
          case 'all-sights':
            allSights = true;
            later.push({ t: simTime + 3.2, fn: () => UI.showMessage('msgAllSights', null, 6000) });
            break;
+         case 'bonus':                       // Piraten-Schatz (Level 2)
+           addMoney(ev.eur || 150);
+           later.push({ t: simTime + 2.6, fn: () => UI.showMessage('msgTreasureBonus', { eur: ev.eur || 150 }, 4500) });
+           break;
+         case 'jelly-shock':                 // Qualle berührt: U-Boot kurz geschockt
+           shockT = SHOCK_TIME;
+           UI.flash();
+           tEvent('ice');
+           UI.showMessage('msgJelly', null, 2800);
+           break;
+         case 'shark-found': UI.showMessage('msgSharkFound', null, 5000); break;
          case 'stalker-dazzled': UI.showMessage('msgStalkerScared'); break;
          case 'stalker-dark': UI.showMessage('msgStalkerDark', null, 5000); break;
          case 'whale-found': UI.showMessage('msgWhaleFound', null, 5000); break;
@@ -989,6 +1066,14 @@
        }
      }
    
+     /* ---- Quallen-Schock: Antrieb fast tot, U-Boot taumelt ---- */
+     if (shockT > 0) {
+       shockT = Math.max(0, shockT - dt);
+       driveThr *= 0.12; driveSteer *= 0.12; driveVert *= 0.12;
+       vel.multiplyScalar(Math.exp(-2.5 * dt));
+       yawVel += (Math.random() - 0.5) * 0.8;
+     }
+   
      stepSub(dt, driveThr, driveSteer, driveVert);
    
      /* ---- U-Boot-Modell animieren ---- */
@@ -1030,7 +1115,7 @@
      updateNearHint();
      updateOxygen(dt);
    
-     if (!darkShown && -g.position.y > WORLD.darkDepth - 10 && !sub.lightOn) {
+     if (!darkShown && -g.position.y > worldCfg.darkDepth - 10 && !sub.lightOn) {
        darkShown = true;
        UI.showMessage('msgDeepDark', null, 4500);
      }
@@ -1047,7 +1132,9 @@
        depth, o2, speed: vel.length(), heading,
        sightsDone, pings: pingsOut,
        money, rating: tourists ? tourists.averageRating() : lastRating,
-       lang: UI.settings.lang
+       lang: UI.settings.lang,
+       sightIcons: sightMeta.icons,
+       sightNames: sightMeta.names[UI.settings.lang] || sightMeta.names.de
      });
    
      const obj = currentObjective();
@@ -1086,7 +1173,7 @@
    if (btnMenu) btnMenu.style.display = 'none';
    
    UI.initUI({
-     onStartLevel: () => startLevel(),
+     onStartLevel: (id) => { currentLevelId = (id === 2) ? 2 : 1; startLevel(); },   // Level-Auswahl: 1 = world.js, 2 = level2.js
      onResume: () => {
        releaseInputs();
        document.body.style.touchAction = 'none';
@@ -1095,7 +1182,7 @@
        focusCanvas();
      },
      onOpenMenu: () => openMenu(),
-     onResultContinue: () => startLevel(),                 // nächste Tour (Geld + Upgrades bleiben)
+     onResultContinue: () => startLevel(),                 // nächste Tour im selben Level (Geld + Upgrades bleiben)
      onResultMenu: () => {
        UI.hideResult();
        disposeLevel();
@@ -1107,7 +1194,7 @@
      onBuyUpgrade: (id) => buyUpgrade(id),
      onSettingsChange: (s) => { if (level) level.setViewDistance(s.view); },
      onLanguageChange: (lang) => {
-       if (sub) sub.updateDisplays({ lang });
+       if (sub) sub.updateDisplays({ lang, sightNames: sightMeta.names[lang] || sightMeta.names.de });
      }
    });
    
@@ -1125,6 +1212,7 @@
      get sub() { return sub; },
      get tourists() { return tourists; },
      get onToilet() { return onToilet; },
+     get levelId() { return currentLevelId; },
      visitAll() { if (level) level.visitAll(); },
      addMoney(n) { addMoney(n || 100); },
      resetSave() {
