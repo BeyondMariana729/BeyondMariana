@@ -1,9 +1,11 @@
 /* ============================================================
    BEYOND MARIANA – level2.js  (LEVEL 2: CORAL REEF)
    Tropisches Korallenriff: türkises Wasser, God Rays, bunter Sand,
-   Korallen / Riesen-Anemonen / Seegras, Felsbogen zum Durchtauchen,
-   Fisch-Schwärme, Schildkröten, Mantas, Riffhai, leuchtende Quallen
-   (schocken das U-Boot), versunkene Piraten-Schatztruhe (Bonus).
+   Korallen / Riesen-Anemonen / Schwämme / Seegras, vier begehbare
+   Korallen-Felsbögen, Fisch-Schwärme, Delfin-Schule, Schildkröten,
+   Mantas, Riffhai, leuchtende Quallen (schocken das U-Boot),
+   versunkene Piraten-Schatztruhe (Bonus) und verstreute Wrackteile
+   (Spanten, Anker, Kanonen, Amphoren).
 
    Gleiche Schnittstelle wie world.js (buildLevel1):
      buildLevel2(scene, renderer) -> level
@@ -16,6 +18,10 @@
 import * as THREE from 'three';
 
 export const WORLD2 = { cameraFar: 1100, darkDepth: 99999, radius: 500 };
+
+/* Dichte-Regler: 1 = volle Pracht, 0.6 = leichter für ältere iPads */
+const DENSITY = 1;
+const dn = (n) => Math.max(1, Math.round(n * DENSITY));
 
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -39,7 +45,9 @@ const FOG_BASE = 0.0078;
 const PATCHES = [
   { x: 0, z: -95, r: 55 }, { x: -95, z: -215, r: 75 }, { x: 175, z: -300, r: 70 }, { x: 65, z: -335, r: 80 },
   { x: -215, z: -70, r: 70 }, { x: 205, z: -55, r: 65 }, { x: -70, z: -430, r: 70 }, { x: -225, z: -330, r: 60 },
-  { x: 120, z: -185, r: 55 }, { x: -20, z: -300, r: 60 }
+  { x: 120, z: -185, r: 55 }, { x: -20, z: -300, r: 60 },
+  /* neue Riff-Flecken (Index 10-14) */
+  { x: 140, z: -120, r: 60 }, { x: -190, z: -285, r: 60 }, { x: 15, z: -405, r: 60 }, { x: -130, z: -130, r: 50 }, { x: 260, z: -200, r: 55 }
 ];
 
 function floorH(x, z) {
@@ -53,14 +61,36 @@ function floorH(x, z) {
   return h;
 }
 
-const ARCH = { x: -95, z: -215, ry: 0.35, R: 20, tube: 6.5 };
+/* Hauptbogen (Sehenswürdigkeit 0) + drei weitere begehbare Bögen */
+const ARCH = { x: -95, z: -215, ry: 0.35, R: 20, tube: 6.5, accent: 0x4fd6c0 };
+const ARCHES = [
+  ARCH,
+  { x: 140, z: -120, ry: -0.6, R: 19, tube: 6, accent: 0xff7fa8 },
+  { x: -190, z: -285, ry: 1.1, R: 24, tube: 7.2, accent: 0xa77bff },
+  { x: 15, z: -405, ry: 0.2, R: 20, tube: 6.5, accent: 0xff9a4a }
+];
 const CHEST_XZ = { x: 178, z: -292 };
 const SHARK_ORBIT = { cx: 65, cz: -340, Rx: 95, Rz: 60, w: 0.07, ph: 0, h0: 14, hA: 3 };
+const DOLPHIN_ORBIT = { cx: 20, cz: -210, Rx: 200, Rz: 130, w: 0.06 };
+
+/* Pier-Pfosten (x, z) – reichen bis in den Sand */
+const DOCK_PILLARS = [];
+[-1, 1].forEach((s) => { for (let z = -12; z <= 28; z += 8) DOCK_PILLARS.push([s * 11.1, z]); });
+[-12, 0, 12].forEach((x) => DOCK_PILLARS.push([x, 35]));
 
 const DOCK_BOXES = [
-  { x0: -13.2, x1: -9, z0: -16, z1: 32, y0: -16, y1: 1 },
-  { x0: 9, x1: 13.2, z0: -16, z1: 32, y0: -16, y1: 1 },
-  { x0: -13.2, x1: 13.2, z0: 32, z1: 37, y0: -16, y1: 1 }
+  { x0: -13.2, x1: -9, z0: -16, z1: 32, y0: -90, y1: 1 },
+  { x0: 9, x1: 13.2, z0: -16, z1: 32, y0: -90, y1: 1 },
+  { x0: -13.2, x1: 13.2, z0: 32, z1: 37, y0: -90, y1: 1 }
+];
+
+/* Verstreute Wrack-Stellen */
+const WRECK_SITES = [
+  { x: -130, z: -40, ry: 0.8, ribs: 7, R: 5.2, anchor: true, cannons: 3, amph: 6, planks: 6 },
+  { x: 230, z: -150, ry: -0.4, ribs: 5, R: 4.6, anchor: true, cannons: 4, amph: 5, planks: 5 },
+  { x: -40, z: -262, ry: 2.2, ribs: 9, R: 6.0, anchor: true, cannons: 2, amph: 4, planks: 8, wheel: true },
+  { x: 100, z: -400, ry: 1.1, ribs: 0, R: 5, anchor: false, cannons: 2, amph: 9, planks: 3 },
+  { x: -250, z: -200, ry: 0.3, ribs: 6, R: 5.0, anchor: true, cannons: 3, amph: 4, planks: 5 }
 ];
 
 function orbitPos(o, t, out) {
@@ -68,6 +98,19 @@ function orbitPos(o, t, out) {
   out.x = o.cx + Math.sin(a) * o.Rx;
   out.z = o.cz + Math.cos(a) * o.Rz;
   out.y = Math.min(-3, floorH(out.x, out.z) + o.h0 + o.hA * Math.sin(a * 1.7 + o.ph * 2));
+  return out;
+}
+
+/* Delfine: schwimmen im Verband in Wellenbögen */
+function dolphinPos(i, t, out) {
+  const o = DOLPHIN_ORBIT;
+  const a = o.w * t - i * 0.05;
+  const side = (i % 2 ? 1 : -1) * (i > 1 ? 2 : 1) * 4;
+  out.x = o.cx + Math.sin(a) * (o.Rx + side);
+  out.z = o.cz + Math.cos(a) * (o.Rz + side * 0.6);
+  const wave = Math.sin(t * 0.85 - i * 0.35);
+  const fl = floorH(out.x, out.z);
+  out.y = Math.min(-2.5, Math.max(fl + 4, -11 + 8.5 * wave));
   return out;
 }
 
@@ -267,6 +310,34 @@ function geoBranch(r) {
   return mergeGeos(parts);
 }
 
+/* Geweihkoralle: schlanke, hoch aufstrebende Äste mit durchgehender Spitze */
+function geoStag(r) {
+  const parts = [];
+  const up = new THREE.Vector3(0, 1, 0);
+  const grow = (base, dir, len, rad, depth) => {
+    const g = new THREE.CylinderGeometry(rad * 0.62, rad, len, 5, 1, true);
+    g.translate(0, len / 2, 0);
+    g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(up, dir));
+    g.translate(base.x, base.y, base.z);
+    parts.push(g);
+    if (depth <= 0) return;
+    const tip = base.clone().addScaledVector(dir, len);
+    for (let i = 0; i < 2; i++) {
+      const d = dir.clone().add(new THREE.Vector3((r() - 0.5) * 1.0, 0.45 + r() * 0.3, (r() - 0.5) * 1.0)).normalize();
+      grow(tip, d, len * 0.8, rad * 0.7, depth - 1);
+    }
+    if (depth > 1) {
+      const d = dir.clone().add(new THREE.Vector3((r() - 0.5) * 0.3, 0.2, (r() - 0.5) * 0.3)).normalize();
+      grow(tip, d, len * 0.85, rad * 0.75, depth - 1);
+    }
+  };
+  for (let i = 0; i < 2; i++) {
+    const d = new THREE.Vector3((r() - 0.5) * 0.7, 1, (r() - 0.5) * 0.7).normalize();
+    grow(new THREE.Vector3((r() - 0.5) * 0.5, 0, (r() - 0.5) * 0.5), d, 1.4, 0.13, 2);
+  }
+  return mergeGeos(parts);
+}
+
 function geoBrain() {
   const g = new THREE.IcosahedronGeometry(1, 2);
   const p = g.attributes.position;
@@ -291,6 +362,23 @@ function geoTube(r) {
     g.translate(Math.cos(a) * d, 0, Math.sin(a) * d);
     parts.push(g);
   }
+  return mergeGeos(parts);
+}
+
+/* Tonnenschwamm-Gruppe: offene Vasen mit Rand */
+function geoSponge(r) {
+  const parts = [];
+  [[0, 0, 1.7, 0.55], [0.85, 0.35, 1.15, 0.42], [-0.6, 0.75, 0.95, 0.38], [0.15, -0.9, 1.35, 0.46], [-0.95, -0.35, 0.7, 0.32]].forEach(([x, z, h, rad]) => {
+    const wob = 0.9 + r() * 0.2;
+    const g = new THREE.CylinderGeometry(rad * 1.05 * wob, rad * 0.7, h, 10, 2, true);
+    g.translate(0, h / 2 - 0.1, 0);
+    g.translate(x, 0, z);
+    parts.push(g);
+    const ring = new THREE.TorusGeometry(rad * 1.05 * wob, 0.07, 5, 10);
+    ring.rotateX(Math.PI / 2);
+    ring.translate(x, h - 0.1, z);
+    parts.push(ring);
+  });
   return mergeGeos(parts);
 }
 
@@ -359,13 +447,82 @@ function geoBlade() {
 }
 
 /* ------------------------------------------------------------
+   Wrack-Geometrien (Anker, Kanone, Amphore, Steuerrad)
+   ------------------------------------------------------------ */
+function geoAnchor() {
+  const parts = [];
+  const shank = new THREE.CylinderGeometry(0.17, 0.22, 5.8, 8); shank.translate(0, 0.4, 0); parts.push(shank);
+  const stock = new THREE.CylinderGeometry(0.13, 0.13, 3, 6); stock.rotateX(Math.PI / 2); stock.translate(0, 2.7, 0); parts.push(stock);
+  const ring = new THREE.TorusGeometry(0.5, 0.09, 6, 12); ring.translate(0, 3.7, 0); parts.push(ring);
+  const arms = new THREE.TorusGeometry(1.5, 0.18, 6, 16, Math.PI); arms.rotateZ(Math.PI); arms.translate(0, -1.0, 0); parts.push(arms);
+  [-1, 1].forEach((s) => {
+    const f = new THREE.ConeGeometry(0.45, 1.0, 4);
+    f.rotateZ(-s * 0.9);
+    f.translate(s * 1.55, -0.85, 0);
+    parts.push(f);
+  });
+  return mergeGeos(parts);
+}
+
+function geoCannon() {
+  const parts = [];
+  const barrel = new THREE.CylinderGeometry(0.32, 0.5, 3.2, 12); barrel.rotateX(Math.PI / 2); parts.push(barrel);
+  const muz = new THREE.TorusGeometry(0.36, 0.08, 6, 12); muz.translate(0, 0, 1.6); parts.push(muz);
+  const base = new THREE.TorusGeometry(0.52, 0.07, 6, 12); base.translate(0, 0, -1.0); parts.push(base);
+  const casc = new THREE.SphereGeometry(0.22, 8, 6); casc.translate(0, 0, -1.75); parts.push(casc);
+  const trun = new THREE.CylinderGeometry(0.11, 0.11, 1.5, 6); trun.rotateZ(Math.PI / 2); trun.translate(0, 0, 0.1); parts.push(trun);
+  return mergeGeos(parts);
+}
+
+function geoAmphoraBody() {
+  const pts = [[0.0, 0], [0.25, 0], [0.45, 0.5], [0.62, 1.2], [0.55, 1.8], [0.28, 2.3], [0.22, 2.6], [0.3, 2.75], [0.0, 2.75]]
+    .map((q) => new THREE.Vector2(q[0], q[1]));
+  return new THREE.LatheGeometry(pts, 12);
+}
+
+function geoAmphoraHandles() {
+  const parts = [];
+  [-1, 1].forEach((s) => {
+    const h = new THREE.TorusGeometry(0.28, 0.05, 5, 8, Math.PI);
+    h.rotateZ(-s * Math.PI / 2);
+    h.translate(s * 0.5, 2.15, 0);
+    parts.push(h);
+  });
+  return mergeGeos(parts);
+}
+
+function geoWheel() {
+  const parts = [];
+  parts.push(new THREE.TorusGeometry(0.9, 0.07, 6, 16));
+  for (let k = 0; k < 4; k++) {
+    const sp = new THREE.CylinderGeometry(0.04, 0.04, 2.1, 5);
+    sp.rotateZ(k * Math.PI / 4);
+    parts.push(sp);
+  }
+  parts.push(new THREE.SphereGeometry(0.16, 8, 6));
+  for (let k = 0; k < 8; k++) {
+    const h = new THREE.CylinderGeometry(0.05, 0.05, 0.5, 5);
+    const a = k * Math.PI / 4;
+    h.rotateZ(a);
+    h.translate(Math.sin(-a) * 0, 0, 0);
+    h.translate(-Math.sin(a) * 1.1, Math.cos(a) * 1.1, 0);
+    parts.push(h);
+  }
+  return mergeGeos(parts);
+}
+
+/* ------------------------------------------------------------
    Fische
    ------------------------------------------------------------ */
 const SPECIES = {
   clown: { size: 1.9, speed: 4.4, body: (x, y, z) => (((z > 0.14 && z < 0.24) || (z < -0.12 && z > -0.22)) ? 0xffffff : 0xff7a1a), tail: 0xff7a1a, fin: 0xff9a3a },
   tang: { size: 2.6, speed: 5.0, body: (x, y, z) => ((z > 0.2 && z < 0.28 && y > -0.2) ? 0x0a1a3a : 0x1f6bff), tail: 0xffe040, fin: 0x1f6bff },
   yellow: { size: 2.4, speed: 5.2, body: () => 0xffe033, tail: 0xffd01a, fin: 0xfff3a0 },
-  parrot: { size: 2.8, speed: 4.8, body: (x, y) => (y < -0.1 ? 0xff5cb0 : 0x31f2a0), tail: 0xff5cb0, fin: 0x7dffd0 }
+  parrot: { size: 2.8, speed: 4.8, body: (x, y) => (y < -0.1 ? 0xff5cb0 : 0x31f2a0), tail: 0xff5cb0, fin: 0x7dffd0 },
+  chromis: { size: 1.6, speed: 5.4, body: (x, y) => (y > 0.05 ? 0x2fd8ff : 0x9bf4ff), tail: 0x2fd8ff, fin: 0x7ceaff },
+  royal: { size: 2.2, speed: 4.8, body: (x, y, z) => (z > 0.1 ? 0xb040ff : 0xffe033), tail: 0xffe033, fin: 0xd080ff },
+  red: { size: 2.5, speed: 4.6, body: (x, y) => (y < -0.1 ? 0xffd0c0 : 0xff4040), tail: 0xff4040, fin: 0xff8080 },
+  butterfly: { size: 2.3, speed: 5.0, body: (x, y, z) => ((z > 0.2 && z < 0.3) ? 0x202020 : 0xffe860), tail: 0xffe860, fin: 0xffffff }
 };
 
 function fishGeo(sp) {
@@ -487,6 +644,40 @@ function buildShark() {
   return { g, body, tail };
 }
 
+/* Delfin: Kopf zeigt nach +z (wie Hai/Schildkröte), Schwanzpartie + Fluke gelenkig */
+function buildDolphin() {
+  const g = new THREE.Group();
+  const body = new THREE.Group(); g.add(body);
+  const topM = new THREE.MeshStandardMaterial({ color: 0x6f8fab, roughness: 0.4, metalness: 0.05 });
+  const botM = new THREE.MeshStandardMaterial({ color: 0xe6eef4, roughness: 0.5 });
+  const dark = new THREE.MeshStandardMaterial({ color: 0x0c0c10, roughness: 0.2 });
+
+  const torso = new THREE.Mesh(new THREE.SphereGeometry(1, 18, 12), topM); torso.scale.set(0.42, 0.44, 1.35); body.add(torso);
+  const belly = new THREE.Mesh(new THREE.SphereGeometry(1, 18, 10), botM); belly.scale.set(0.36, 0.3, 1.3); belly.position.y = -0.17; body.add(belly);
+  const melon = new THREE.Mesh(new THREE.SphereGeometry(0.34, 14, 10), topM); melon.scale.set(0.95, 0.9, 1.1); melon.position.set(0, 0.02, 1.2); body.add(melon);
+  const beak = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.62, 10).rotateX(Math.PI / 2), topM); beak.position.set(0, -0.04, 1.62); body.add(beak);
+  const jaw = new THREE.Mesh(new THREE.ConeGeometry(0.115, 0.56, 8).rotateX(Math.PI / 2), botM); jaw.position.set(0, -0.12, 1.58); body.add(jaw);
+  [-1, 1].forEach((s) => {
+    const e = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 6), dark); e.position.set(s * 0.3, 0.1, 1.3); body.add(e);
+    const f = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.7, 3), topM);
+    f.scale.set(1, 1, 0.3); f.position.set(s * 0.42, -0.2, 0.6); f.rotation.set(0.4, 0, -s * 1.8); body.add(f);
+  });
+  const dorsal = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.6, 4), topM);
+  dorsal.scale.set(1, 1, 0.28); dorsal.position.set(0, 0.52, 0.1); dorsal.rotation.x = -0.55; body.add(dorsal);
+
+  const rear = new THREE.Group(); rear.position.set(0, 0, -1.15); body.add(rear);
+  const stock = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 8), topM); stock.scale.set(0.24, 0.26, 1.1); stock.position.z = -0.6; rear.add(stock);
+  const fluke = new THREE.Group(); fluke.position.set(0, 0, -1.6); rear.add(fluke);
+  [-1, 1].forEach((s) => {
+    const f = new THREE.Mesh(new THREE.SphereGeometry(1, 10, 6), topM);
+    f.scale.set(0.55, 0.05, 0.3); f.position.set(s * 0.5, 0, -0.1); f.rotation.y = s * 0.45; fluke.add(f);
+  });
+  const fc = new THREE.Mesh(new THREE.SphereGeometry(1, 8, 6), topM); fc.scale.set(0.2, 0.06, 0.28); fluke.add(fc);
+
+  g.scale.setScalar(1.7);
+  return { g, body, rear, fluke };
+}
+
 /* ============================================================
    buildLevel2
    ============================================================ */
@@ -600,26 +791,49 @@ export function buildLevel2(scene, renderer) {
   let bubAcc = 0, bubIdx = 0;
 
   /* ==========================================================
+     Bögen: Transformationen vorab (für blocked(), Sehenswürdigkeit, Bau)
+     ========================================================== */
+  const archList = ARCHES.map((A) => {
+    const c = Math.cos(A.ry), s = Math.sin(A.ry);
+    const ay = Math.max(
+      floorH(A.x + A.R * c, A.z - A.R * s),
+      floorH(A.x - A.R * c, A.z + A.R * s),
+      floorH(A.x, A.z)
+    ) - 4;
+    const toWorld = (lx, ly, lz) => new THREE.Vector3(A.x + lx * c + lz * s, ay + ly, A.z - lx * s + lz * c);
+    return { A, c, s, ay, toWorld };
+  });
+  const archC = archList[0].c, archS = archList[0].s, archAY = archList[0].ay;
+
+  /* ==========================================================
      Platzierung von Korallen, Felsen, Seegras
      ========================================================== */
   const spheres = [];       // Kollisionskugeln {x,y,z,r}
   const addSphere = (x, y, z, r) => spheres.push({ x, y, z, r });
-  const pl = { branch: [], brain: [], tube: [], fan: [], anem: [], rock: [], grass: [] };
+  const pl = { branch: [], stag: [], brain: [], tube: [], sponge: [], fan: [], anem: [], rock: [], grass: [] };
   const BRANCH_COLS = [0xff4f9a, 0xff8a2a, 0xa05cff, 0x57ff8a, 0xff3fd0, 0x2fe8ff, 0xffd23a];
-  const BRAIN_COLS = [0xff9ac4, 0xffc27a, 0xc9a3ff, 0x8dffb8, 0xffe27a];
+  const STAG_COLS = [0x2fe8ff, 0xffd23a, 0xff8a2a, 0xa05cff, 0xff4f9a];
+  const BRAIN_COLS = [0xff9ac4, 0xffc27a, 0xc9a3ff, 0x8dffb8, 0xffe27a, 0x7be8ff, 0xff7a1a];
   const TUBE_COLS = [0x2fe8ff, 0xff4fd8, 0xffd23a, 0x7dffa0];
-  const FAN_COLS = [0xc060ff, 0xff5fa0, 0xff8a50];
+  const SPONGE_COLS = [0xff8a2a, 0xb05cff, 0xffd23a, 0xff5fa0, 0x2fe8ff];
+  const FAN_COLS = [0xc060ff, 0xff5fa0, 0xff8a50, 0x2fe8ff, 0xffd23a, 0xff4fd8];
   const ANEM_COLS = [0xff6ad5, 0xb67bff, 0x7dffb0, 0xffa94d];
   const ROCK_COLS = [0x9c8b76, 0x8a7a68, 0xb09a80, 0x7c7266];
   const GRASS_COLS = [0x3fae4a, 0x5cd35a, 0x2e9a5a, 0x7ce06a];
+  const COLS = { branch: BRANCH_COLS, stag: STAG_COLS, brain: BRAIN_COLS, tube: TUBE_COLS, sponge: SPONGE_COLS, fan: FAN_COLS, anem: ANEM_COLS };
 
-  const archC = Math.cos(ARCH.ry), archS = Math.sin(ARCH.ry);
   function blocked(x, z) {
     if (x > -24 && x < 24 && z > -30 && z < 46) return true;                                   // Dock
-    const dx = x - ARCH.x, dz = z - ARCH.z;
-    const lx = dx * archC - dz * archS, lz = dx * archS + dz * archC;
-    if (Math.abs(lx) < 17 && Math.abs(lz) < 13) return true;                                   // Durchfahrt Felsbogen
+    for (let i = 0; i < archList.length; i++) {                                                // Durchfahrten der Bögen
+      const E = archList[i];
+      const dx = x - E.A.x, dz = z - E.A.z;
+      const lx = dx * E.c - dz * E.s, lz = dx * E.s + dz * E.c;
+      if (Math.abs(lx) < E.A.R - 3 && Math.abs(lz) < E.A.tube * 2) return true;
+    }
     if (Math.hypot(x - CHEST_XZ.x, z - CHEST_XZ.z) < 16) return true;                          // Schatztruhe
+    for (let i = 0; i < WRECK_SITES.length; i++) {                                             // Wrack-Stellen
+      if (Math.hypot(x - WRECK_SITES[i].x, z - WRECK_SITES[i].z) < 9) return true;
+    }
     return false;
   }
 
@@ -635,18 +849,23 @@ export function buildLevel2(scene, renderer) {
     return [p.x + Math.cos(a) * r, p.z + Math.sin(a) * r];
   };
   const anemSpots = [];
+  const pushGrass = (x, z, y) => {
+    pl.grass.push({ x, y: y === undefined ? floorH(x, z) - 0.05 : y, z, s: 0.7 + rng() * 0.9, sy: 0.8 + rng() * 0.9, ry: rng() * 6.283, tx: 0, tz: 0, c: GRASS_COLS[Math.floor(rng() * GRASS_COLS.length)] });
+  };
 
   PATCHES.forEach((p) => {
     let x, z, o;
-    for (let i = 0; i < 46; i++) { [x, z] = polar(p, 1); put('branch', x, z, 0.8 + rng() * 1.1, BRANCH_COLS); }
-    for (let i = 0; i < 22; i++) {
+    for (let i = 0; i < dn(44); i++) { [x, z] = polar(p, 1); put('branch', x, z, 0.8 + rng() * 1.1, BRANCH_COLS); }
+    for (let i = 0; i < dn(26); i++) { [x, z] = polar(p, 1); put('stag', x, z, 0.9 + rng() * 1.2, STAG_COLS); }
+    for (let i = 0; i < dn(30); i++) {
       [x, z] = polar(p, 1.05);
       const s = 0.9 + rng() * 2.1;
       o = put('brain', x, z, s, BRAIN_COLS);
       if (o && s > 2.3) addSphere(x, o.y + s * 0.35, z, s * 0.8);
     }
-    for (let i = 0; i < 18; i++) { [x, z] = polar(p, 1); put('tube', x, z, 0.8 + rng() * 0.8, TUBE_COLS); }
-    for (let i = 0; i < 14; i++) { [x, z] = polar(p, 1); put('fan', x, z, 1.2 + rng() * 1.4, FAN_COLS); }
+    for (let i = 0; i < dn(20); i++) { [x, z] = polar(p, 1); put('tube', x, z, 0.8 + rng() * 0.8, TUBE_COLS); }
+    for (let i = 0; i < dn(12); i++) { [x, z] = polar(p, 1); put('sponge', x, z, 0.9 + rng() * 1.1, SPONGE_COLS); }
+    for (let i = 0; i < dn(24); i++) { [x, z] = polar(p, 1); put('fan', x, z, 1.2 + rng() * 1.4, FAN_COLS); }
     for (let i = 0; i < 6; i++) { [x, z] = polar(p, 0.9); o = put('anem', x, z, 1.6 + rng() * 1.8, ANEM_COLS); if (o) anemSpots.push(o); }
     for (let i = 0; i < 8; i++) {
       [x, z] = polar(p, 1.1);
@@ -654,13 +873,10 @@ export function buildLevel2(scene, renderer) {
       o = put('rock', x, z, s, ROCK_COLS, { sy: s * (0.7 + rng() * 0.4) });
       if (o) addSphere(x, o.y + s * 0.25, z, s * 0.78);
     }
-    for (let i = 0; i < 110; i++) {
+    for (let i = 0; i < dn(110); i++) {
       [x, z] = polar(p, 1.4);
       if (blocked(x, z)) continue;
-      for (let k = 0; k < 6; k++) {
-        const gx = x + (rng() - 0.5) * 1.4, gz = z + (rng() - 0.5) * 1.4;
-        pl.grass.push({ x: gx, y: floorH(gx, gz) - 0.05, z: gz, s: 0.7 + rng() * 0.9, sy: 0.8 + rng() * 0.9, ry: rng() * 6.283, tx: 0, tz: 0, c: GRASS_COLS[Math.floor(rng() * GRASS_COLS.length)] });
-      }
+      for (let k = 0; k < 6; k++) pushGrass(x + (rng() - 0.5) * 1.4, z + (rng() - 0.5) * 1.4);
     }
   });
   // verstreute Felsen und Seegras-Felder auf freiem Sand
@@ -671,68 +887,262 @@ export function buildLevel2(scene, renderer) {
     const o = put('rock', x, z, s, ROCK_COLS, { sy: s * 0.8 });
     if (o && s > 2.5) addSphere(x, o.y + s * 0.25, z, s * 0.78);
   }
-  for (let i = 0; i < 70; i++) {
+  for (let i = 0; i < dn(70); i++) {
     const a = rng() * 6.283, r = 40 + rng() * 400;
     const x = Math.cos(a) * r, z = Math.sin(a) * r;
     if (blocked(x, z)) continue;
-    for (let k = 0; k < 6; k++) {
-      const gx = x + (rng() - 0.5) * 2, gz = z + (rng() - 0.5) * 2;
-      pl.grass.push({ x: gx, y: floorH(gx, gz) - 0.05, z: gz, s: 0.7 + rng() * 0.9, sy: 0.8 + rng() * 0.9, ry: rng() * 6.283, tx: 0, tz: 0, c: GRASS_COLS[Math.floor(rng() * GRASS_COLS.length)] });
+    for (let k = 0; k < 6; k++) pushGrass(x + (rng() - 0.5) * 2, z + (rng() - 0.5) * 2);
+  }
+  // leuchtende Korallen-Gruppen auf dem freien Riffboden
+  {
+    const TYPES = ['branch', 'branch', 'stag', 'brain', 'brain', 'fan', 'sponge', 'tube'];
+    for (let i = 0; i < dn(70); i++) {
+      const a = rng() * 6.283, r = 35 + rng() * 400;
+      const cx = Math.cos(a) * r, cz = Math.sin(a) * r;
+      const n = 5 + Math.floor(rng() * 5);
+      for (let k = 0; k < n; k++) {
+        const aa = rng() * 6.283, rr = rng() * 9;
+        const x = cx + Math.cos(aa) * rr, z = cz + Math.sin(aa) * rr;
+        const type = TYPES[Math.floor(rng() * TYPES.length)];
+        const s = type === 'brain' ? 0.8 + rng() * 1.6 : 0.8 + rng() * 1.1;
+        put(type, x, z, s, COLS[type]);
+      }
     }
   }
 
-  /* ---------- Felsbogen ---------- */
-  const archToWorld = (lx, ly, lz, ay) => new THREE.Vector3(
-    ARCH.x + lx * archC + lz * archS, ay + ly, ARCH.z - lx * archS + lz * archC
-  );
-  const archAY = Math.max(
-    floorH(ARCH.x + ARCH.R * archC, ARCH.z - ARCH.R * archS),
-    floorH(ARCH.x - ARCH.R * archC, ARCH.z + ARCH.R * archS),
-    floorH(ARCH.x, ARCH.z)
-  ) - 4;
-  const archGroup = new THREE.Group();
-  archGroup.position.set(ARCH.x, archAY, ARCH.z);
-  archGroup.rotation.y = ARCH.ry;
-  root.add(archGroup);
-  {
-    const ag = new THREE.TorusGeometry(ARCH.R, ARCH.tube, 14, 28, Math.PI);
+  /* ---------- Fundamente der Pier-Pfosten (Fels + Bewuchs) ---------- */
+  DOCK_PILLARS.forEach(([x, z]) => {
+    const fy = floorH(x, z);
+    const s = 1.4 + rng() * 0.7;
+    pl.rock.push({ x, y: fy - 0.3, z, s, sy: s * 0.8, ry: rng() * 6.283, tx: 0, tz: 0, c: ROCK_COLS[Math.floor(rng() * ROCK_COLS.length)] });
+    const a0 = rng() * 6.283;
+    const s2 = 0.9 + rng() * 0.6;
+    pl.rock.push({ x: x + Math.cos(a0) * 1.5, y: floorH(x + Math.cos(a0) * 1.5, z + Math.sin(a0) * 1.5) - 0.3, z: z + Math.sin(a0) * 1.5, s: s2, sy: s2 * 0.8, ry: rng() * 6.283, tx: 0, tz: 0, c: ROCK_COLS[Math.floor(rng() * ROCK_COLS.length)] });
+    const T = ['branch', 'brain', 'sponge', 'fan', 'stag'];
+    for (let k = 0; k < 4; k++) {
+      const a = rng() * 6.283, rr = 1.6 + rng() * 1.2;
+      const px = x + Math.cos(a) * rr, pz = z + Math.sin(a) * rr;
+      const type = T[Math.floor(rng() * T.length)];
+      pl[type].push({ x: px, y: floorH(px, pz) - 0.1, z: pz, s: 0.5 + rng() * 0.6, ry: rng() * 6.283, tx: 0, tz: 0, c: COLS[type][Math.floor(rng() * COLS[type].length)] });
+    }
+    for (let k = 0; k < 4; k++) {
+      const a = rng() * 6.283, rr = 1.2 + rng() * 1.6;
+      pushGrass(x + Math.cos(a) * rr, z + Math.sin(a) * rr);
+    }
+  });
+
+  /* ---------- Korallen-Felsbögen (4 Stück, begehbar) ---------- */
+  const archMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, flatShading: true });
+  const algae = new THREE.Color(0.25, 0.5, 0.3);
+  archList.forEach((E, idx) => {
+    const A = E.A;
+    const grp = new THREE.Group();
+    grp.position.set(A.x, E.ay, A.z);
+    grp.rotation.y = A.ry;
+    root.add(grp);
+
+    const ag = new THREE.TorusGeometry(A.R, A.tube, 16, 36, Math.PI);
     const p = ag.attributes.position, n = ag.attributes.normal;
-    const col = new Float32Array(p.count * 3), c = new THREE.Color(), algae = new THREE.Color(0.25, 0.5, 0.3);
+    const col = new Float32Array(p.count * 3), c = new THREE.Color(), accent = new THREE.Color(A.accent);
+    const ph = idx * 1.7;
     for (let i = 0; i < p.count; i++) {
       const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
-      const k = 0.9 * Math.sin(x * 0.35 + z * 0.5) * Math.cos(y * 0.3 - z * 0.4) + 0.5 * Math.sin(x * 0.9 + y * 0.7 + z * 0.6);
+      const k = 0.9 * Math.sin(x * 0.35 + z * 0.5 + ph) * Math.cos(y * 0.3 - z * 0.4) + 0.5 * Math.sin(x * 0.9 + y * 0.7 + z * 0.6);
       p.setXYZ(i, x + n.getX(i) * k, y + n.getY(i) * k, z + n.getZ(i) * k);
       c.setRGB(0.80, 0.66, 0.48);
-      c.multiplyScalar(0.82 + 0.18 * Math.sin(y * 0.4 + x * 0.2));
+      c.multiplyScalar(0.82 + 0.18 * Math.sin(y * 0.4 + x * 0.2 + ph));
+      const nz = 0.5 + 0.5 * Math.sin(x * 0.23 + y * 0.31 + z * 0.47 + ph);
+      c.lerp(accent, (idx === 0 ? 0.25 : 0.5) * smooth(0.3, 0.85, nz));
       if (y < 3) c.lerp(algae, 0.5 * (1 - y / 3));
       col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
     }
     ag.setAttribute('color', new THREE.BufferAttribute(col, 3));
     ag.computeVertexNormals();
-    archGroup.add(new THREE.Mesh(ag, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, flatShading: true })));
-  }
-  for (let k = 0; k <= 16; k++) {
-    const th = k / 16 * Math.PI;
-    const w = archToWorld(ARCH.R * Math.cos(th), ARCH.R * Math.sin(th), 0, archAY);
-    addSphere(w.x, w.y, w.z, ARCH.tube * 0.95);
-  }
-  [-1, 1].forEach((s) => {
-    const w = archToWorld(s * 24, -3, 0, archAY);
-    pl.rock.push({ x: w.x, y: w.y, z: w.z, s: 8.5, sy: 7, ry: rng() * 6.283, tx: 0, tz: 0, c: ROCK_COLS[0] });
-    addSphere(w.x, w.y + 2, w.z, 7.2);
+    grp.add(new THREE.Mesh(ag, archMat));
+
+    // Kollision entlang des Bogens
+    const nSph = Math.ceil(Math.PI * A.R / 3.8);
+    for (let k = 0; k <= nSph; k++) {
+      const th = k / nSph * Math.PI;
+      const w = E.toWorld(A.R * Math.cos(th), A.R * Math.sin(th), 0);
+      addSphere(w.x, w.y, w.z, A.tube * 0.95);
+    }
+    // Fels-Stützen links/rechts
+    [-1, 1].forEach((s) => {
+      const w = E.toWorld(s * (A.R + 4), -3, 0);
+      pl.rock.push({ x: w.x, y: w.y, z: w.z, s: A.tube * 1.3, sy: A.tube * 1.05, ry: rng() * 6.283, tx: 0, tz: 0, c: ROCK_COLS[0] });
+      addSphere(w.x, w.y + 2, w.z, A.tube * 1.1);
+    });
+    // Korallen-, Schwamm- und Anemonen-Bewuchs
+    const ARCH_TYPES = [['branch', 0.26], ['brain', 0.44], ['sponge', 0.58], ['anem', 0.70], ['fan', 0.82], ['stag', 0.92], ['tube', 1.01]];
+    const nCor = Math.round((idx === 0 ? 100 : 120) * Math.max(0.6, DENSITY));
+    for (let i = 0; i < nCor; i++) {
+      const th = (0.1 + rng() * 0.8) * Math.PI, phi = (rng() - 0.5) * 2.6;
+      const lx = A.R * Math.cos(th) + Math.cos(th) * Math.cos(phi) * A.tube * 0.95;
+      const ly = A.R * Math.sin(th) + Math.sin(th) * Math.cos(phi) * A.tube * 0.95;
+      const lz = Math.sin(phi) * A.tube * 0.95;
+      const w = E.toWorld(lx, ly, lz);
+      const r = rng();
+      let type = 'tube';
+      for (let q = 0; q < ARCH_TYPES.length; q++) if (r < ARCH_TYPES[q][1]) { type = ARCH_TYPES[q][0]; break; }
+      pl[type].push({ x: w.x, y: w.y, z: w.z, s: 0.7 + rng() * 0.9, ry: rng() * 6.283, tx: 0, tz: 0, c: COLS[type][Math.floor(rng() * COLS[type].length)] });
+    }
+    // Seegras auf den Pfeilern und dem Scheitel
+    for (let i = 0; i < 46; i++) {
+      const leg = rng();
+      const th = (leg < 0.4 ? 0.02 + rng() * 0.14 : (leg < 0.8 ? 0.84 + rng() * 0.14 : 0.35 + rng() * 0.3)) * Math.PI;
+      const phi = (rng() - 0.5) * 2.4;
+      const lx = A.R * Math.cos(th) + Math.cos(th) * Math.cos(phi) * A.tube * 0.95;
+      const ly = A.R * Math.sin(th) + Math.sin(th) * Math.cos(phi) * A.tube * 0.95;
+      const lz = Math.sin(phi) * A.tube * 0.95;
+      const w = E.toWorld(lx, ly, lz);
+      for (let k = 0; k < 4; k++) pushGrass(w.x + (rng() - 0.5) * 1.2, w.z + (rng() - 0.5) * 1.2, w.y);
+    }
+    // Wehendes Seegras, das von der Innenseite herabhängt
+    for (let i = 0; i < 34; i++) {
+      const th = (0.1 + rng() * 0.8) * Math.PI;
+      const rin = A.R - A.tube * 0.85;
+      const w = E.toWorld(rin * Math.cos(th), rin * Math.sin(th), (rng() - 0.5) * A.tube * 1.2);
+      pl.grass.push({ x: w.x, y: w.y, z: w.z, s: 0.8 + rng() * 0.8, sy: 0.8 + rng() * 0.8, ry: rng() * 6.283, tx: Math.PI, tz: 0, c: GRASS_COLS[Math.floor(rng() * GRASS_COLS.length)] });
+    }
   });
-  for (let i = 0; i < 70; i++) {            // Korallen-Bewuchs auf dem Bogen
-    const th = (0.12 + rng() * 0.76) * Math.PI, phi = (rng() - 0.5) * 2.6;
-    const lx = ARCH.R * Math.cos(th) + Math.cos(th) * Math.cos(phi) * ARCH.tube * 0.95;
-    const ly = ARCH.R * Math.sin(th) + Math.sin(th) * Math.cos(phi) * ARCH.tube * 0.95;
-    const lz = Math.sin(phi) * ARCH.tube * 0.95;
-    const w = archToWorld(lx, ly, lz, archAY);
-    const r = rng();
-    const type = r < 0.4 ? 'branch' : (r < 0.75 ? 'brain' : (r < 0.9 ? 'anem' : 'tube'));
-    const cols = type === 'branch' ? BRANCH_COLS : (type === 'brain' ? BRAIN_COLS : (type === 'anem' ? ANEM_COLS : TUBE_COLS));
-    pl[type].push({ x: w.x, y: w.y, z: w.z, s: 0.7 + rng() * 0.9, ry: rng() * 6.283, tx: 0, tz: 0, c: cols[Math.floor(rng() * cols.length)] });
-  }
   const archPos = new THREE.Vector3(ARCH.x, archAY + 6, ARCH.z);
+
+  /* ==========================================================
+     Wrack-Teile: Spanten, Anker, Kanonen, Amphoren, Planken
+     ========================================================== */
+  const wreckTex = woodTexture();
+  const wreckWood = new THREE.MeshStandardMaterial({ map: wreckTex, color: 0x8a8f78, roughness: 0.95, side: THREE.DoubleSide });
+  const ironMat = new THREE.MeshStandardMaterial({ color: 0x4d4439, roughness: 0.85, metalness: 0.25, flatShading: true });
+  const clayMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9 });
+  const CLAY_COLS = [0xb0643a, 0x9a5a3a, 0xc27a48, 0x8f6a4a];
+
+  function decorInst(geo, mat, list, tinted) {
+    if (!list.length) return;
+    const mesh = new THREE.InstancedMesh(geo, mat, list.length);
+    const col = new THREE.Color();
+    list.forEach((o, i) => {
+      dummy.position.set(o.x, o.y, o.z);
+      dummy.rotation.set(o.rx || 0, o.ry || 0, o.rz || 0);
+      dummy.scale.setScalar(o.s || 1);
+      dummy.updateMatrix();
+      mesh.setMatrixAt(i, dummy.matrix);
+      if (tinted) { col.setHex(o.c); mesh.setColorAt(i, col); }
+    });
+    mesh.instanceMatrix.needsUpdate = true;
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    mesh.frustumCulled = false;
+    root.add(mesh);
+  }
+
+  const anchorList = [], cannonList = [], amphList = [], plankList = [];
+  const SITE_CORAL = ['branch', 'brain', 'sponge', 'fan', 'stag', 'tube'];
+
+  WRECK_SITES.forEach((S) => {
+    const sc = Math.cos(S.ry), ss = Math.sin(S.ry);
+    const toW = (lx, lz) => [S.x + lx * sc + lz * ss, S.z - lx * ss + lz * sc];
+    const around = (rMin, rMax) => {
+      const a = rng() * 6.283, r = rMin + rng() * (rMax - rMin);
+      const x = S.x + Math.cos(a) * r, z = S.z + Math.sin(a) * r;
+      return [x, z, floorH(x, z)];
+    };
+
+    // Schiffs-Spanten (verwittert, teils abgebrochen)
+    if (S.ribs > 0) {
+      let minF = 1e9;
+      for (let k = 0; k < S.ribs; k++) {
+        const [wx, wz] = toW(0, (k - (S.ribs - 1) / 2) * 2.2);
+        minF = Math.min(minF, floorH(wx, wz));
+      }
+      const g = new THREE.Group();
+      g.position.set(S.x, minF - 0.3, S.z);
+      g.rotation.y = S.ry;
+      root.add(g);
+      for (let k = 0; k < S.ribs; k++) {
+        const t = S.ribs > 1 ? k / (S.ribs - 1) : 0.5;
+        const R = S.R * (0.55 + 0.45 * Math.sin(t * Math.PI));
+        const arc = Math.PI * (0.62 + rng() * 0.38);
+        const lz = (k - (S.ribs - 1) / 2) * 2.2;
+        const rib = new THREE.Mesh(new THREE.TorusGeometry(R, 0.28, 5, 16, arc), wreckWood);
+        rib.rotation.z = Math.PI;
+        rib.position.set(0, R * 0.7, lz);
+        const mirror = rng() < 0.5;
+        if (mirror) rib.scale.x = -1;
+        g.add(rib);
+        // intakes Ende der Spante: Kollision + Bewuchs
+        const ex = mirror ? R : -R;
+        const [wx, wz] = toW(ex, lz);
+        const wy = g.position.y + R * 0.7;
+        addSphere(wx, wy, wz, 1.5);
+        if (rng() < 0.85) {
+          const type = SITE_CORAL[Math.floor(rng() * SITE_CORAL.length)];
+          pl[type].push({ x: wx, y: wy - 0.2, z: wz, s: 0.6 + rng() * 0.7, ry: rng() * 6.283, tx: 0, tz: 0, c: COLS[type][Math.floor(rng() * COLS[type].length)] });
+        }
+      }
+      // umgestürzter Mast
+      const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.4, 10, 8), wreckWood);
+      const [mx, mz] = toW(S.R * 0.5, -(S.ribs * 1.1 + 3.5));
+      mast.position.set(mx, floorH(mx, mz) + 0.5, mz);
+      mast.rotation.set(0, S.ry + 0.4, 1.45);
+      root.add(mast);
+      // Bewuchs und Felsen um die Spanten
+      for (let k = 0; k < 4; k++) {
+        const [x, z, y] = around(3, 9);
+        const s = 0.8 + rng() * 1.2;
+        pl.rock.push({ x, y: y - 0.2, z, s, sy: s * 0.8, ry: rng() * 6.283, tx: 0, tz: 0, c: ROCK_COLS[Math.floor(rng() * ROCK_COLS.length)] });
+      }
+      for (let k = 0; k < 10; k++) { const [x, z, y] = around(2, 10); pushGrass(x, z, y); }
+    }
+
+    // Ruder-Steuerrad
+    if (S.wheel) {
+      const [x, z, y] = around(3, 6);
+      const wh = new THREE.Mesh(geoWheel(), wreckWood);
+      wh.position.set(x, y + 0.5, z);
+      wh.rotation.set(1.2, rng() * 6, 0);
+      wh.scale.setScalar(1.3);
+      root.add(wh);
+    }
+
+    // Anker
+    if (S.anchor) {
+      const [x, z, y] = around(3, 8);
+      anchorList.push({ x, y: y + 0.6, z, rx: 0, ry: rng() * 6.283, rz: 1.2 + rng() * 0.3, s: 1.1 + rng() * 0.3 });
+      addSphere(x, y + 0.8, z, 1.8);
+    }
+
+    // Kanonen
+    for (let k = 0; k < S.cannons; k++) {
+      const [x, z, y] = around(2, 9);
+      cannonList.push({ x, y: y + 0.35, z, rx: -(0.05 + rng() * 0.3), ry: rng() * 6.283, rz: 0, s: 1.0 + rng() * 0.3 });
+      addSphere(x, y + 0.5, z, 1.2);
+    }
+
+    // Amphoren
+    const [acx, acz] = around(5, 10);
+    for (let k = 0; k < S.amph; k++) {
+      const x = acx + (rng() - 0.5) * 5, z = acz + (rng() - 0.5) * 5;
+      const y = floorH(x, z);
+      const lying = rng() < 0.7;
+      amphList.push({
+        x, y: lying ? y + 0.15 : y - 0.5, z,
+        rx: 0, ry: rng() * 6.283, rz: lying ? (rng() < 0.5 ? -1 : 1) * (1.15 + rng() * 0.3) : (rng() - 0.5) * 0.3,
+        s: 0.8 + rng() * 0.5, c: CLAY_COLS[Math.floor(rng() * CLAY_COLS.length)]
+      });
+    }
+
+    // Planken
+    for (let k = 0; k < S.planks; k++) {
+      const [x, z, y] = around(1, 11);
+      plankList.push({ x, y: y + 0.1, z, rx: (rng() - 0.5) * 0.3, ry: rng() * 6.283, rz: (rng() - 0.5) * 0.3, s: 0.7 + rng() * 0.8 });
+    }
+  });
+
+  decorInst(geoAnchor(), ironMat, anchorList, false);
+  decorInst(geoCannon(), ironMat, cannonList, false);
+  decorInst(geoAmphoraBody(), clayMat, amphList, true);
+  decorInst(geoAmphoraHandles(), clayMat, amphList, true);
+  decorInst(new THREE.BoxGeometry(0.4, 0.14, 2.8), wreckWood, plankList, false);
 
   /* ---------- Instanzierte Meshes ---------- */
   function makeInst(geo, mat, list) {
@@ -756,15 +1166,17 @@ export function buildLevel2(scene, renderer) {
     return mesh;
   }
   makeInst(geoBranch(rng), coralMat({ sway: 0.03, glow: 0.3 }), pl.branch);
+  makeInst(geoStag(rng), coralMat({ sway: 0.05, glow: 0.32 }), pl.stag);
   makeInst(geoBrain(), coralMat({ glow: 0.22 }), pl.brain);
   makeInst(geoTube(rng), coralMat({ double: true, glow: 0.32 }), pl.tube);
+  makeInst(geoSponge(rng), coralMat({ double: true, glow: 0.3 }), pl.sponge);
   makeInst(geoFan(), coralMat({ double: true, sway: 0.05, glow: 0.3 }), pl.fan);
   makeInst(geoAnemone(rng), coralMat({ sway: 0.1, glow: 0.4 }), pl.anem);
   makeInst(geoRock(), coralMat({ glow: 0, rough: 0.95 }), pl.rock);
   makeInst(geoBlade(), coralMat({ double: true, sway: 0.12, glow: 0.15, rough: 0.8 }), pl.grass);
 
   /* ==========================================================
-     Dock (Plattform an der Oberfläche)
+     Dock (Plattform an der Oberfläche) – Pfosten bis in den Sand
      ========================================================== */
   const buoys = [];
   {
@@ -774,13 +1186,19 @@ export function buildLevel2(scene, renderer) {
     const darkWood = new THREE.MeshStandardMaterial({ color: 0x5a3a22, roughness: 0.85 });
     const steel = new THREE.MeshStandardMaterial({ color: 0x46535f, roughness: 0.45, metalness: 0.7 });
     const add = (w, h, d, m, x, y, z) => { const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); b.position.set(x, y, z); dock.add(b); return b; };
-    const pillarGeo = new THREE.CylinderGeometry(0.55, 0.55, 16, 8);
+
+    // Pfosten: von der Pier-Oberkante bis in den Sandboden
+    DOCK_PILLARS.forEach(([x, z]) => {
+      const fl = floorH(x, z), top = 0.5, bot = fl - 1.5, h = top - bot;
+      const pil = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.75, h, 10), darkWood);
+      pil.position.set(x, (top + bot) / 2, z);
+      dock.add(pil);
+    });
+
     [-1, 1].forEach((s) => {
       add(4.2, 1.0, 48, wood, s * 11.1, 0.3, 8);
       add(0.2, 0.2, 48, darkWood, s * 13.0, 1.9, 8);
-      for (let z = -12; z <= 28; z += 8) {
-        const pil = new THREE.Mesh(pillarGeo, darkWood); pil.position.set(s * 11.1, -7.5, z); dock.add(pil);
-      }
+      [-3, -12, -22].forEach((y) => add(0.35, 0.35, 48, darkWood, s * 11.1, y, 8));   // Längsstreben
       for (let z = -14; z <= 30; z += 6) add(0.2, 1.4, 0.2, darkWood, s * 13.0, 1.3, z);
       const lampPost = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.12, 3.4, 8), steel);
       lampPost.position.set(s * 12.4, 2.2, -14); dock.add(lampPost);
@@ -788,7 +1206,7 @@ export function buildLevel2(scene, renderer) {
       bulb.position.set(s * 12.4, 4.1, -14); dock.add(bulb);
     });
     add(26.4, 1.0, 5, wood, 0, 0.3, 34.5);
-    [-12, 0, 12].forEach((x) => { const pil = new THREE.Mesh(pillarGeo, darkWood); pil.position.set(x, -7.5, 35); dock.add(pil); });
+    [-3, -12, -22].forEach((y) => add(26.4, 0.35, 0.35, darkWood, 0, y, 35));         // Querstreben Rückwand
     // Schild
     [-8, 8].forEach((x) => add(0.4, 8, 0.4, darkWood, x, 4.8, 36.6));
     const sign = new THREE.Mesh(new THREE.PlaneGeometry(14, 4.4), new THREE.MeshBasicMaterial({ map: signTexture() }));
@@ -861,12 +1279,27 @@ export function buildLevel2(scene, renderer) {
   addSchool('clown', aSpot(2), 8, 28, 4, 0.3);
   addSchool('clown', aSpot(14), 8, 28, 4, 0.28);
   addSchool('clown', aSpot(30), 8, 28, 4, 0.32);
+  addSchool('clown', aSpot(46), 8, 24, 4, 0.29);
+  addSchool('clown', aSpot(62), 8, 24, 4, 0.31);
   addSchool('yellow', PATCHES[0], 40, 30, 8, 0.12);
   addSchool('yellow', PATCHES[8], 45, 30, 9, 0.1);
+  addSchool('yellow', PATCHES[11], 45, 28, 8, 0.11);
   addSchool('tang', PATCHES[1], 45, 30, 9, 0.11);
   addSchool('tang', PATCHES[4], 50, 30, 10, 0.1);
+  addSchool('tang', PATCHES[12], 50, 28, 9, 0.12);
   addSchool('parrot', PATCHES[3], 60, 26, 11, 0.09);
   addSchool('parrot', PATCHES[6], 55, 26, 11, 0.1);
+  addSchool('parrot', PATCHES[14], 55, 24, 10, 0.095);
+  addSchool('chromis', PATCHES[2], 50, 32, 8, 0.11);
+  addSchool('chromis', PATCHES[9], 50, 32, 9, 0.1);
+  addSchool('chromis', PATCHES[13], 45, 30, 8, 0.12);
+  addSchool('royal', PATCHES[5], 45, 24, 7, 0.1);
+  addSchool('royal', PATCHES[10], 45, 24, 7, 0.09);
+  addSchool('red', PATCHES[7], 40, 22, 6, 0.09);
+  addSchool('red', PATCHES[12], 40, 22, 6, 0.1);
+  addSchool('butterfly', PATCHES[10], 40, 22, 7, 0.1);
+  addSchool('butterfly', PATCHES[13], 40, 22, 7, 0.11);
+  addSchool('butterfly', PATCHES[3], 42, 22, 7, 0.095);
 
   function updateSchool(s, dt) {
     _tmp.copy(s.c);
@@ -897,16 +1330,26 @@ export function buildLevel2(scene, renderer) {
   }
 
   /* ==========================================================
-     Schildkröten, Mantas, Riffhai
+     Schildkröten, Delfine, Mantas, Riffhai
      ========================================================== */
   const turtles = [];
-  [[1, 1.8], [3, 2.2], [4, 1.6], [8, 2.0], [6, 1.9]].forEach(([pi, size], i) => {
+  [[1, 1.8], [3, 2.2], [4, 1.6], [8, 2.0], [6, 1.9], [0, 1.7], [2, 2.1], [5, 1.5], [7, 2.3], [10, 1.8]].forEach(([pi, size], i) => {
     const t = buildTurtle();
     t.g.scale.setScalar(size);
     root.add(t.g);
-    const o = { cx: PATCHES[pi].x, cz: PATCHES[pi].z, Rx: 40 + i * 9, Rz: 30 + i * 7, w: 0.06 + i * 0.006, ph: i * 1.9, h0: 9 + i * 2, hA: 4 };
+    const o = { cx: PATCHES[pi].x, cz: PATCHES[pi].z, Rx: 40 + i * 8, Rz: 30 + i * 6, w: 0.06 + i * 0.005, ph: i * 1.9, h0: 9 + i * 1.8, hA: 4 };
     turtles.push({ t, o, ph: i * 1.3, pos: t.g.position });
   });
+
+  const dolphins = [];
+  for (let i = 0; i < 4; i++) {
+    const d = buildDolphin();
+    root.add(d.g);
+    const D = { d, i, ph: i * 0.9, pos: d.g.position };
+    dolphinPos(i, 0, D.pos);
+    dolphins.push(D);
+  }
+
   const mantas = [];
   [[-100, -200, 1.2], [140, -330, 2.0], [-170, -380, 1.5]].forEach(([cx, cz, size], i) => {
     const m = buildManta();
@@ -1193,6 +1636,15 @@ export function buildLevel2(scene, renderer) {
       T.t.body.rotation.z = Math.sin(time * 0.9 + T.ph) * 0.06;
     });
 
+    // Delfine: gemeinsame Wellenbögen
+    dolphins.forEach((D) => {
+      dolphinPos(D.i, time, D.pos);
+      dolphinPos(D.i, time + 0.35, _tmp);
+      D.d.g.lookAt(_tmp);
+      D.d.rear.rotation.x = Math.sin(time * 3.4 + D.ph) * 0.15;
+      D.d.fluke.rotation.x = Math.sin(time * 3.4 + D.ph - 0.9) * 0.32;
+    });
+
     // Mantas
     mantas.forEach((M) => {
       orbitPos(M.o, time, M.m.g.position);
@@ -1262,7 +1714,15 @@ export function buildLevel2(scene, renderer) {
     },
     spawn: { position: new THREE.Vector3(0, -3.2, 12), yaw: 0 },
     schools,
-    fauna: { pods: [{ members: turtles.map((T) => ({ pos: T.pos })) }, { members: [{ pos: shark.pos }] }], rays: mantas.map((M) => ({ w: M.w })), jellies },
+    fauna: {
+      pods: [
+        { members: turtles.map((T) => ({ pos: T.pos })) },
+        { members: [{ pos: shark.pos }] },
+        { members: dolphins.map((D) => ({ pos: D.pos })) }
+      ],
+      rays: mantas.map((M) => ({ w: M.w })),
+      jellies
+    },
     sights,
     get sightCount() { return sightCount; },
     get time() { return time; },
