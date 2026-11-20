@@ -1,15 +1,23 @@
 /* ============================================================
    BEYOND MARIANA – ui.js  (MARIANA TOURS)
-   Menüs (PLAY / SETTINGS / Level-Auswahl), Sprachen (DE/EN),
-   Einstellungen (Sichtweite), HUD-Helfer, Meldungen, Gamepad-Menüsteuerung,
+   Menüs (PLAY / SETTINGS / Level-Auswahl: Level 1 Arctic Trench,
+   Level 2 Coral Reef – freigeschaltet nach der ersten Level-1-Tour),
+   Sprachen (DE/EN), Einstellungen (Sichtweite), HUD-Helfer
+   (inkl. setSightIcons), Meldungen, Gamepad-Menüsteuerung,
    permanente Leiste oben: Live-Sterne + Geld (€),
-   Tour-Abrechnung mit Upgrade-Shop, Level-2-Freischaltung (ab 3.5 ★)
+   Tour-Abrechnung mit Upgrade-Shop
+
+   Speicher:
+     'beyond-mariana-settings-v1'        -> Sprache, Sichtweite
+     'beyondMariana_level2Unlocked'      -> 'true' sobald Level 2 frei ist
    ============================================================ */
 
    const STORAGE_KEY = 'beyond-mariana-settings-v1';
+   export const LEVEL2_KEY = 'beyondMariana_level2Unlocked';
 
    /* ---------- Einstellungen ---------- */
-   export const settings = { lang: 'de', view: 1, level2: false };
+   export const settings = { lang: 'de', view: 1 };
+   let level2Unlocked = false;
    
    try {
      const raw = localStorage.getItem(STORAGE_KEY);
@@ -17,14 +25,18 @@
        const o = JSON.parse(raw);
        if (o.lang === 'de' || o.lang === 'en') settings.lang = o.lang;
        if (typeof o.view === 'number') settings.view = Math.min(1.6, Math.max(0.6, o.view));
-       if (o.level2 === true) settings.level2 = true;
+       if (o.level2 === true) level2Unlocked = true;            // alter Spielstand
      } else if (typeof navigator !== 'undefined' && /^en/i.test(navigator.language || '')) {
        settings.lang = 'en';
      }
    } catch (e) { /* localStorage kann blockiert sein – kein Problem */ }
    
+   try {
+     if (localStorage.getItem(LEVEL2_KEY) === 'true') level2Unlocked = true;
+   } catch (e) { /* ignorieren */ }
+   
    function saveSettings() {
-     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(settings)); } catch (e) { /* ignorieren */ }
+     try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ lang: settings.lang, view: settings.view })); } catch (e) { /* ignorieren */ }
    }
    
    /* ---------- Upgrades (Shop nach der Tour) ---------- */
@@ -71,15 +83,15 @@
        btnAction: 'AKTION',
        level: 'Level',
        locked: 'Gesperrt',
-       unlocked: 'Freigeschaltet',
        playable: 'Spielbar',
-       lvl1Name: 'Arktis-Eis',
+       lvl1Name: 'Arctic Trench',
        lvl1Desc: 'Eisloch, Wrack, Eis-Kathedrale und ein 150-Meter-Wal – Tour für Touristen',
-       lvl2Name: 'Tiefsee-Graben',
-       lvl2Desc: 'Freigeschaltet – kommt bald!',
+       lvl2Name: 'Coral Reef',
+       lvl2Desc: 'Bunte Korallen, Felsbogen, Piraten-Schatz, Riffhai – und Quallen, die zwicken!',
+       lvl2LockedDesc: 'Gesperrt – schließe zuerst eine Tour in Level 1 ab',
        lvlLockedDesc: 'Noch nicht verfügbar',
        lockedToast: 'Dieses Level ist noch gesperrt.',
-       lvl2Toast: 'Level 2 ist freigeschaltet – es kommt bald!',
+       lvl2LockedToast: 'Level 2 ist gesperrt – beende zuerst eine Tour in Level 1!',
        modeExt: 'AUSSEN-KAMERA',
        modeCockpit: 'COCKPIT-KAMERA',
        modeWalk: 'IM U-BOOT',
@@ -87,7 +99,7 @@
        objSights: 'Besuche die Sehenswürdigkeiten ({n}/3) – folge den Pings im Radar',
        objDock: 'Alle 3 gesehen! Zurück zur Plattform zum Andocken – oder erst noch Pillen verkaufen …',
        objDone: 'Tour abgerechnet!',
-       // Meldungen
+       // Meldungen Level 1
        msgSight_wreck: 'Sehenswürdigkeit {n}/3: das gesunkene Schiffswrack!',
        msgSight_cathedral: 'Sehenswürdigkeit {n}/3: die leuchtende Eiskristall-Kathedrale!',
        msgSight_whale: 'Sehenswürdigkeit {n}/3: der 150-Meter-Polarwal!',
@@ -95,6 +107,15 @@
        msgStalkerDark: 'Ein Frost-Stalker beobachtet dich im Dunkeln … schalte den Scheinwerfer ein!',
        msgStalkerScared: 'Der Frost-Stalker ist vom Licht geblendet und weicht zurück.',
        msgWhaleFound: 'Da ist er – ein gewaltiger Polarwal! Fahr ganz nah ran!',
+       // Meldungen Level 2
+       msgSight_arch: 'Sehenswürdigkeit {n}/3: durch den riesigen Felsbogen getaucht!',
+       msgSight_treasure: 'Sehenswürdigkeit {n}/3: die versunkene Piraten-Schatztruhe!',
+       msgSight_shark: 'Sehenswürdigkeit {n}/3: der große Riffhai!',
+       msgSharkFound: 'Da kreist er – ein riesiger Riffhai! Fahr ganz nah ran!',
+       msgJelly: 'Zzzzap! Eine Qualle hat das U-Boot geschockt!',
+       msgTreasureBonus: 'Piratenschatz geborgen: +{eur} € Bonus!',
+       msgLevel2Unlocked: 'Level 2 „Coral Reef“ freigeschaltet!',
+       // allgemein
        msgO2Low: 'Sauerstoff wird knapp – zurück zur Plattform!',
        msgO2Charged: 'Sauerstoff aufgeladen',
        msgOxygenOut: 'Notaufstieg! Das U-Boot wurde zur Plattform gezogen.',
@@ -112,8 +133,9 @@
        resRating: 'Bewertung',
        resEarned: 'Verdient',
        resWallet: 'Kasse',
-       resLevelOk: '🔓 Level 2 freigeschaltet!',
-       resLevelNo: 'Ab 3.5 ★ wird Level 2 freigeschaltet – diesmal leider nicht.',
+       resLevelNew: '🔓 Level 2 freigeschaltet: Coral Reef!',
+       resLevelOk: '🏆 Top-Tour! Die Touristen sind begeistert.',
+       resLevelNo: 'Ab 3.5 ★ gilt eine Tour als Top-Tour – diesmal leider nicht.',
        shopTitle: 'UPGRADE-SHOP',
        buy: 'KAUFEN',
        owned: 'GEKAUFT',
@@ -161,15 +183,15 @@
        btnAction: 'ACTION',
        level: 'Level',
        locked: 'Locked',
-       unlocked: 'Unlocked',
        playable: 'Playable',
-       lvl1Name: 'Arctic Ice',
+       lvl1Name: 'Arctic Trench',
        lvl1Desc: 'Ice hole, wreck, ice cathedral and a 150-meter whale – a tour for tourists',
-       lvl2Name: 'Deep-Sea Trench',
-       lvl2Desc: 'Unlocked – coming soon!',
+       lvl2Name: 'Coral Reef',
+       lvl2Desc: 'Colorful corals, rock arch, pirate treasure, reef shark – and jellyfish that sting!',
+       lvl2LockedDesc: 'Locked – finish a tour in Level 1 first',
        lvlLockedDesc: 'Not available yet',
        lockedToast: 'This level is still locked.',
-       lvl2Toast: 'Level 2 is unlocked – coming soon!',
+       lvl2LockedToast: 'Level 2 is locked – finish a tour in Level 1 first!',
        modeExt: 'EXTERIOR CAMERA',
        modeCockpit: 'COCKPIT CAMERA',
        modeWalk: 'INSIDE THE SUB',
@@ -183,6 +205,13 @@
        msgStalkerDark: 'A Frost Stalker is watching you in the dark … switch on the headlight!',
        msgStalkerScared: 'The Frost Stalker is dazzled by the light and backs away.',
        msgWhaleFound: 'There it is – a gigantic polar whale! Get really close!',
+       msgSight_arch: 'Sight {n}/3: dived through the giant rock arch!',
+       msgSight_treasure: 'Sight {n}/3: the sunken pirate treasure chest!',
+       msgSight_shark: 'Sight {n}/3: the great reef shark!',
+       msgSharkFound: 'There it circles – a huge reef shark! Get really close!',
+       msgJelly: 'Zzzzap! A jellyfish just shocked the sub!',
+       msgTreasureBonus: 'Pirate treasure recovered: +€{eur} bonus!',
+       msgLevel2Unlocked: 'Level 2 "Coral Reef" unlocked!',
        msgO2Low: 'Oxygen is running low – return to the platform!',
        msgO2Charged: 'Oxygen recharged',
        msgOxygenOut: 'Emergency ascent! The sub was pulled back to the platform.',
@@ -199,8 +228,9 @@
        resRating: 'Rating',
        resEarned: 'Earned',
        resWallet: 'Cash',
-       resLevelOk: '🔓 Level 2 unlocked!',
-       resLevelNo: 'Level 2 unlocks at 3.5 ★ – not this time.',
+       resLevelNew: '🔓 Level 2 unlocked: Coral Reef!',
+       resLevelOk: '🏆 Top tour! The tourists are thrilled.',
+       resLevelNo: 'A tour counts as a top tour from 3.5 ★ – not this time.',
        shopTitle: 'UPGRADE SHOP',
        buy: 'BUY',
        owned: 'OWNED',
@@ -215,9 +245,10 @@
      }
    };
    
+   /* Level 1 immer spielbar · Level 2 nach der ersten Level-1-Tour · 3–5 folgen */
    export const LEVELS = [
      { id: 1, nameKey: 'lvl1Name', descKey: 'lvl1Desc', playable: true },
-     { id: 2, nameKey: 'lvl2Name', descKey: 'lvlLockedDesc', playable: false, unlockFlag: 'level2' },
+     { id: 2, nameKey: 'lvl2Name', descKey: 'lvl2Desc', lockedDescKey: 'lvl2LockedDesc', playable: true, requiresUnlock: true },
      { id: 3, nameKey: null, descKey: 'lvlLockedDesc', playable: false },
      { id: 4, nameKey: null, descKey: 'lvlLockedDesc', playable: false },
      { id: 5, nameKey: null, descKey: 'lvlLockedDesc', playable: false }
@@ -253,13 +284,27 @@
      return ('ontouchstart' in window) || (navigator.maxTouchPoints || 0) > 0;
    }
    
+   /* ---------- Level-2-Freischaltung ---------- */
+   export function isLevel2Unlocked() { return level2Unlocked; }
+   
+   /* v = true: freischalten und dauerhaft speichern; v = false: nur Anzeige (löscht nichts) */
+   export function setLevel2Unlocked(v) {
+     level2Unlocked = !!v;
+     if (level2Unlocked) {
+       try { localStorage.setItem(LEVEL2_KEY, 'true'); } catch (e) { /* ignorieren */ }
+     }
+     renderLevels();
+   }
+   
+   function levelOpen(lv) {
+     return !!lv.playable && (!lv.requiresUnlock || level2Unlocked);
+   }
+   
    /* ---------- Leiste oben: Live-Sterne + Geld ---------- */
    let ratingEl = null;
    let ratingActive = false;
    let hudShown = false;
    let ratingPopTimer = 0;
-   let ratingChipTimer = 0;
-   let moneyChipTimer = 0;
    
    function initRatingBar() {
      if (ratingEl) return;
@@ -389,37 +434,37 @@
      if (!list) return;
      list.innerHTML = '';
      LEVELS.forEach((lv) => {
-       const open = !lv.playable && lv.unlockFlag && settings[lv.unlockFlag];
+       const open = levelOpen(lv);
        const btn = document.createElement('button');
-       btn.className = 'level-card ' + (lv.playable ? 'playable' : (open ? 'unlocked' : 'locked'));
+       btn.className = 'level-card ' + (open ? 'playable' : 'locked');
        btn.type = 'button';
        btn.dataset.level = String(lv.id);
    
        const num = document.createElement('div');
        num.className = 'num';
-       num.textContent = (lv.playable || open) ? String(lv.id) : '🔒';
+       num.textContent = open ? String(lv.id) : '🔒';
    
        const info = document.createElement('div');
        info.className = 'info';
        const name = document.createElement('div');
        name.className = 'name';
-       name.textContent = (lv.nameKey && (lv.playable || open)) ? (t('level') + ' ' + lv.id + ': ' + t(lv.nameKey)) : (t('level') + ' ' + lv.id);
+       name.textContent = (lv.nameKey && lv.playable) ? (t('level') + ' ' + lv.id + ': ' + t(lv.nameKey)) : (t('level') + ' ' + lv.id);
        const desc = document.createElement('div');
        desc.className = 'desc';
-       desc.textContent = open ? t('lvl2Desc') : t(lv.descKey);
+       desc.textContent = open ? t(lv.descKey) : t(lv.lockedDescKey || lv.descKey);
        info.appendChild(name);
        info.appendChild(desc);
    
        const state = document.createElement('div');
        state.className = 'state';
-       state.textContent = lv.playable ? t('playable') : (open ? t('unlocked') : t('locked'));
+       state.textContent = open ? t('playable') : t('locked');
    
        btn.appendChild(num);
        btn.appendChild(info);
        btn.appendChild(state);
        btn.addEventListener('click', () => {
-         if (!lv.playable) {
-           toast(open ? t('lvl2Toast') : t('lockedToast'));
+         if (!levelOpen(lv)) {
+           toast(lv.requiresUnlock ? t('lvl2LockedToast') : t('lockedToast'));
            btn.animate(
              [{ transform: 'translateX(0)' }, { transform: 'translateX(-7px)' }, { transform: 'translateX(7px)' }, { transform: 'translateX(0)' }],
              { duration: 260 }
@@ -469,6 +514,8 @@
    }
    
    function startLevel(id) {
+     const lv = LEVELS.find((l) => l.id === id);
+     if (!lv || !levelOpen(lv)) return;
      hideMenu();
      inGame = true;
      if (cb.onStartLevel) cb.onStartLevel(id);
@@ -484,6 +531,13 @@
    }
    
    export function setTouchVisible(v) { $('touch').classList.toggle('hidden', !v); }
+   
+   /* Symbole der 3 Sehenswürdigkeiten im HUD (Level 1: ['🚢','💎','🐋'] · Level 2: ['🌉','💰','🦈']) */
+   export function setSightIcons(icons) {
+     if (!icons) return;
+     const nodes = (el && el.sights) ? el.sights : [$('sight-0'), $('sight-1'), $('sight-2')];
+     nodes.forEach((c, i) => { if (c && icons[i]) c.textContent = icons[i]; });
+   }
    
    export function showMessage(keyOrText, vars, ms) {
      const text = (I18N.de[keyOrText] !== undefined) ? t(keyOrText, vars) : keyOrText;
@@ -562,7 +616,7 @@
    }
    
    /* ---------- Tour-Abrechnung mit Shop ---------- */
-   /* state: { rating, earned, money, owned: {golden, fog, flood} } */
+   /* state: { rating, earned, money, owned: {golden, fog, flood}, newUnlock } */
    function renderResult(s) {
      const r = Math.min(5, Math.max(1, Number(s.rating) || 1));
      $('res-stars').style.setProperty('--p', (r / 5 * 100) + '%');
@@ -571,8 +625,13 @@
      $('res-wallet').textContent = Math.round(s.money || 0) + ' €';
      const lv = $('res-level');
      const ok = r >= 3.5;
-     lv.textContent = ok ? t('resLevelOk') : t('resLevelNo');
-     lv.className = 'res-level ' + (ok ? 'ok' : 'no');
+     if (s.newUnlock) {
+       lv.textContent = t('resLevelNew');
+       lv.className = 'res-level ok';
+     } else {
+       lv.textContent = ok ? t('resLevelOk') : t('resLevelNo');
+       lv.className = 'res-level ' + (ok ? 'ok' : 'no');
+     }
    
      const list = $('shop-list');
      list.innerHTML = '';
@@ -616,8 +675,6 @@
    
    export function showResult(state) {
      lastResult = Object.assign({}, state);
-     const ok = (Number(state.rating) || 0) >= 3.5;
-     if (ok && !settings.level2) { settings.level2 = true; saveSettings(); renderLevels(); }
      resultOpen = true;
      renderResult(lastResult);
      $('result').classList.remove('hidden');
