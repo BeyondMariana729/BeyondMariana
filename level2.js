@@ -7,6 +7,18 @@
    versunkene Piraten-Schatztruhe (Bonus) und verstreute Wrackteile
    (Spanten, Anker, Kanonen, Amphoren).
 
+   NEU in dieser Version:
+   - 3D-Höhenlandschaft: Sanddünen, tiefe Riff-Rinnen, erhöhte Plateaus,
+     Hänge werden automatisch felsig eingefärbt.
+   - Massive, kantige Felswände (Low-Poly, flat shaded) mit dichtem
+     Korallen-, Schwamm- und Seegras-Bewuchs + Kollision.
+   - 3 tropische Inseln (Strand, Gras, Palmen, Büsche, Felsen). Die Inseln
+     sind Teil des Höhenfelds und damit VOLLSTÄNDIG massiv vom Meeresboden
+     bis zur Spitze – kein Hohlraum, nichts zum Darunterdurchschwimmen.
+     Das U-Boot wird von Inseln auch seitlich zuverlässig abgeblockt.
+   - Alle Platzierungen (Korallen, Wracks, Truhe, Bögen, Tiere) lesen die
+     Höhe aus floorH() und passen sich dem Terrain an.
+
    Gleiche Schnittstelle wie world.js (buildLevel1):
      buildLevel2(scene, renderer) -> level
    level.spawn, schools, fauna, sights, sightCount, setViewDistance(v),
@@ -49,13 +61,37 @@ const PATCHES = [
   /* neue Riff-Flecken (Index 10-14) */
   { x: 140, z: -120, r: 60 }, { x: -190, z: -285, r: 60 }, { x: 15, z: -405, r: 60 }, { x: -130, z: -130, r: 50 }, { x: 260, z: -200, r: 55 }
 ];
+/* Vorberechnung für die schnelle Höhenfunktion */
+PATCHES.forEach((p) => { const s = p.r * 0.55; p.k = 1 / (2 * s * s); p.lim = 16 * s * s; });
 
-function floorH(x, z) {
+/* Tropische Inseln: R = Radius der Wasserlinie, peak = Höhe über Wasser.
+   Der Unterwasser-Sockel reicht (siehe islandH) bis ca. 2.3 * R und geht
+   lückenlos in den Meeresboden über. */
+const ISLANDS = [
+  { x: -335, z: -125, R: 40, peak: 20, ph: 0.4 },
+  { x: 335, z: -70, R: 44, peak: 24, ph: 2.1 },
+  { x: 230, z: -395, R: 36, peak: 17, ph: 4.0 }
+];
+
+/* Unebener Meeresboden ohne Sonderzonen: Hügel, Dünen, Plateaus, Rinnen */
+function rawH(x, z) {
   let h = -40 + 5 * Math.sin(x * 0.011 + 1.3) * Math.cos(z * 0.013) + 2.6 * Math.sin(x * 0.031 + z * 0.027) + 1.4 * Math.sin(x * 0.071 - z * 0.053);
   for (let i = 0; i < PATCHES.length; i++) {
     const p = PATCHES[i];
-    const dx = x - p.x, dz = z - p.z, s = p.r * 0.55;
-    h += 5 * Math.exp(-(dx * dx + dz * dz) / (2 * s * s));
+    const dx = x - p.x, dz = z - p.z, d2 = dx * dx + dz * dz;
+    if (d2 < p.lim) h += 5 * Math.exp(-d2 * p.k);
+  }
+  /* Bereich um den Dock bleibt eben und tief (Start des U-Boots) */
+  const m = smooth(45, 130, Math.hypot(x, (z - 8) * 0.7));
+  if (m > 0) {
+    const dunes = 2.6 * Math.sin(x * 0.043 + 0.8 * Math.sin(z * 0.019)) * Math.sin(z * 0.036 + 0.6 * Math.sin(x * 0.027))
+      + 1.1 * Math.sin((x + z * 0.6) * 0.11) + 0.35 * Math.sin((x * 0.9 + z) * 0.28);
+    const n = Math.sin(x * 0.0075 + 0.4) * Math.sin(z * 0.0068 + 1.1) + 0.5 * Math.sin(x * 0.013 - z * 0.011 + 2.0);
+    const plateau = 12 * smooth(0.38, 0.52, n);
+    const w1 = Math.sin(x * 0.017 + 2.1 * Math.sin(z * 0.009 + 0.5) + 0.9);
+    const w2 = Math.sin(z * 0.014 + 1.8 * Math.sin(x * 0.008 + 1.2) + 2.0);
+    const chan = 9 * Math.exp(-w1 * w1 * 38) + 7 * Math.exp(-w2 * w2 * 38);
+    h += m * (dunes + plateau - chan);
   }
   h += smooth(420, 580, Math.hypot(x, z)) * 55;
   return h;
@@ -93,10 +129,69 @@ const WRECK_SITES = [
   { x: -250, z: -200, ry: 0.3, ribs: 6, R: 5.0, anchor: true, cannons: 3, amph: 4, planks: 5 }
 ];
 
+/* Ebene Zonen: Truhe, Wracks und Bögen bekommen einen ruhigen Untergrund,
+   damit nichts schief im Hang steckt oder schwebt. */
+const ZONES = [];
+ZONES.push({ x: CHEST_XZ.x, z: CHEST_XZ.z, r: 24 });
+WRECK_SITES.forEach((S) => ZONES.push({ x: S.x, z: S.z, r: 17 }));
+ARCHES.forEach((A) => ZONES.push({ x: A.x, z: A.z, r: A.R + 14 }));
+ZONES.forEach((Z) => { Z.h = rawH(Z.x, Z.z); Z.r2 = Z.r * Z.r; });
+
+/* Inselprofil. u = Entfernung / Wasserlinien-Radius (mit unregelmäßiger Küste).
+   u < 1  : Strand und Berg, durchgehend massiv bis 0 m und höher
+   u 1..2.3: Sockel – von der Wasserlinie sanft abfallend bis zum Meeresboden
+   Jeder Punkt innerhalb von u < 2.3 ist Boden, also gibt es nirgends einen
+   Hohlraum unter der Insel. */
+function islandH(I, x, z, h0) {
+  const dx = x - I.x, dz = z - I.z;
+  const d2 = dx * dx + dz * dz, far = I.R * 2.9;
+  if (d2 >= far * far) return h0;
+  const a = Math.atan2(dz, dx);
+  const k = 0.11 * Math.sin(a * 3 + I.ph) + 0.07 * Math.sin(a * 5 + I.ph * 2.3) + 0.04 * Math.sin(a * 8 + I.ph * 0.7);
+  const u = Math.sqrt(d2) / (I.R * (1 + k));
+  if (u >= 2.3) return h0;
+  if (u < 1) {
+    let T = I.peak * Math.pow(1 - u, 1.7);
+    T += 1.8 * Math.sin(x * 0.21 + I.ph) * Math.sin(z * 0.19 - I.ph) * smooth(2.5, 9, T);
+    T += 1.0 * Math.sin(x * 0.5 + z * 0.43) * smooth(4, 10, T);
+    return T;
+  }
+  const t = (u - 1) / 1.3;
+  return h0 * (t * t * (3 - 2 * t));
+}
+
+/* Endgültige Bodenhöhe (inkl. Inseln) – von allem im Level benutzt */
+function floorH(x, z) {
+  let h = rawH(x, z);
+  for (let i = 0; i < ZONES.length; i++) {
+    const Z = ZONES[i];
+    const dx = x - Z.x, dz = z - Z.z, d2 = dx * dx + dz * dz;
+    if (d2 >= Z.r2) continue;
+    const w = 1 - smooth(Z.r * 0.5, Z.r, Math.sqrt(d2));
+    h += (Z.h - h) * w;
+  }
+  for (let i = 0; i < ISLANDS.length; i++) h = islandH(ISLANDS[i], x, z, h);
+  return h;
+}
+
+/* Tiere umschwimmen die Inseln (Radialprojektion, bleibt stetig) */
+function avoidIslands(o, k) {
+  for (let i = 0; i < ISLANDS.length; i++) {
+    const I = ISLANDS[i];
+    const dx = o.x - I.x, dz = o.z - I.z, lim = I.R * k;
+    const d2 = dx * dx + dz * dz;
+    if (d2 < lim * lim) {
+      const d = Math.sqrt(d2) || 0.001;
+      o.x = I.x + dx / d * lim; o.z = I.z + dz / d * lim;
+    }
+  }
+}
+
 function orbitPos(o, t, out) {
   const a = o.w * t + o.ph;
   out.x = o.cx + Math.sin(a) * o.Rx;
   out.z = o.cz + Math.cos(a) * o.Rz;
+  avoidIslands(out, 1.9);
   out.y = Math.min(-3, floorH(out.x, out.z) + o.h0 + o.hA * Math.sin(a * 1.7 + o.ph * 2));
   return out;
 }
@@ -108,6 +203,7 @@ function dolphinPos(i, t, out) {
   const side = (i % 2 ? 1 : -1) * (i > 1 ? 2 : 1) * 4;
   out.x = o.cx + Math.sin(a) * (o.Rx + side);
   out.z = o.cz + Math.cos(a) * (o.Rz + side * 0.6);
+  avoidIslands(out, 1.9);
   const wave = Math.sin(t * 0.85 - i * 0.35);
   const fl = floorH(out.x, out.z);
   out.y = Math.min(-2.5, Math.max(fl + 4, -11 + 8.5 * wave));
@@ -447,6 +543,95 @@ function geoBlade() {
 }
 
 /* ------------------------------------------------------------
+   Kantige Felsblöcke (Low-Poly, viele Facetten) für Klippen & Inseln.
+   Die Verschiebung hängt nur von der Position ab, daher bleiben
+   gemeinsame Ecken zusammen (keine Risse).
+   ------------------------------------------------------------ */
+function hash3(x, y, z) {
+  const s = Math.sin(x * 127.1 + y * 311.7 + z * 74.7) * 43758.5453;
+  return s - Math.floor(s);
+}
+
+function geoRockBlock(rx, ry, rz, taper, yaw, lean, seed) {
+  const g = new THREE.IcosahedronGeometry(1, 1);
+  const p = g.attributes.position;
+  const sd = Math.floor(seed * 7);
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+    const k = 0.74 + 0.5 * hash3(Math.round(x * 40) + sd, Math.round(y * 40), Math.round(z * 40));
+    const vx = x * k, vy = y * k, vz = z * k;
+    const f = 1 - taper * smooth(-1, 1, vy);
+    p.setXYZ(i, vx * f * rx, vy * ry, vz * f * rz);
+  }
+  g.rotateZ(lean);
+  g.rotateY(yaw);
+  return g;
+}
+
+/* ------------------------------------------------------------
+   Palmen, Büsche (Inseln)
+   ------------------------------------------------------------ */
+function cylBetween(a, b, r0, r1, seg) {
+  const dir = b.clone().sub(a);
+  const len = dir.length();
+  dir.normalize();
+  const g = new THREE.CylinderGeometry(r1, r0, len, seg, 1, false);
+  g.translate(0, len / 2, 0);
+  g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir));
+  g.translate(a.x, a.y, a.z);
+  return g;
+}
+
+function geoFrond(T, az, L) {
+  const N = 5, ca = Math.cos(az), sa = Math.sin(az), pos = [];
+  const Lp = [], Rp = [];
+  for (let j = 0; j <= N; j++) {
+    const s = j / N, out = s * L;
+    const y = T.y + 1.3 * Math.sin(s * 2.2) - 1.5 * s * s;
+    const cx = T.x + ca * out, cz = T.z + sa * out, w = 0.55 * (1 - s * 0.75);
+    Lp.push([cx - sa * w, y, cz + ca * w]);
+    Rp.push([cx + sa * w, y, cz - ca * w]);
+  }
+  for (let j = 0; j < N; j++) {
+    pos.push(...Lp[j], ...Rp[j], ...Lp[j + 1], ...Rp[j], ...Rp[j + 1], ...Lp[j + 1]);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  return g;
+}
+
+function geoPalm() {
+  const items = [];
+  const H = 9, lean = 2.4, SEG = 6;
+  const P = (t) => new THREE.Vector3(lean * t * t, H * t, 0);
+  for (let i = 0; i < SEG; i++) {
+    const a = P(i / SEG), b = P((i + 1) / SEG);
+    items.push({ geo: cylBetween(a, b, 0.42 - 0.22 * (i / SEG), 0.42 - 0.22 * ((i + 1) / SEG), 6), col: i % 2 ? 0x8a6a42 : 0x7a5a38 });
+  }
+  const top = P(1);
+  for (let k = 0; k < 9; k++) {
+    const az = k / 9 * Math.PI * 2 + k * 0.3;
+    items.push({ geo: geoFrond(top, az, 3.6 + (k % 3) * 0.5), col: k % 2 ? 0x2f9a48 : 0x3bb257 });
+  }
+  for (let k = 0; k < 3; k++) {
+    const nut = new THREE.SphereGeometry(0.24, 6, 5);
+    nut.translate(top.x + Math.cos(k * 2.1) * 0.4, top.y - 0.35, top.z + Math.sin(k * 2.1) * 0.4);
+    items.push({ geo: nut, col: 0x4a2f1c });
+  }
+  return mergeColored(items);
+}
+
+function geoBush() {
+  const items = [];
+  [[0, 0.5, 0, 1.0, 0x2f8a3a], [0.8, 0.35, 0.3, 0.75, 0x3da34a], [-0.7, 0.35, -0.3, 0.8, 0x2a7a35], [0.1, 0.4, -0.8, 0.7, 0x35963f]].forEach(([x, y, z, s, c]) => {
+    const g = new THREE.IcosahedronGeometry(s, 0);
+    g.translate(x, y, z);
+    items.push({ geo: g, col: c });
+  });
+  return mergeColored(items);
+}
+
+/* ------------------------------------------------------------
    Wrack-Geometrien (Anker, Kanone, Amphore, Steuerrad)
    ------------------------------------------------------------ */
 function geoAnchor() {
@@ -698,6 +883,7 @@ export function buildLevel2(scene, renderer) {
   const dummy = new THREE.Object3D();
   const _tmp = new THREE.Vector3();
   const _look = new THREE.Vector3();
+  const UP = new THREE.Vector3(0, 1, 0);
 
   /* ---------- Licht ---------- */
   root.add(new THREE.HemisphereLight(0xb8f4ff, 0xffe0a8, 1.5));
@@ -705,7 +891,7 @@ export function buildLevel2(scene, renderer) {
   sun.position.set(-80, 220, 60);
   root.add(sun); root.add(sun.target);
 
-  /* ---------- Wasseroberfläche (von unten sichtbar) ---------- */
+  /* ---------- Wasseroberfläche (von unten und von oben sichtbar) ---------- */
   const rippleTex = rippleTexture();
   rippleTex.repeat.set(60, 60);
   const surfGeo = new THREE.PlaneGeometry(3000, 3000); surfGeo.rotateX(-Math.PI / 2);
@@ -714,10 +900,18 @@ export function buildLevel2(scene, renderer) {
   }));
   surface.position.y = 0;
   root.add(surface);
+  /* Obere Seite des Wassers, damit die Inseln von außen im Meer stehen */
+  const surfaceTop = new THREE.Mesh(surfGeo, new THREE.MeshBasicMaterial({
+    map: rippleTex, color: 0x5fdcee, side: THREE.FrontSide, transparent: true, opacity: 0.82, depthWrite: false
+  }));
+  surfaceTop.position.y = 0;
+  root.add(surfaceTop);
 
-  /* ---------- Meeresboden ---------- */
+  /* ---------- Meeresboden (Höhenfeld inkl. Inseln) ---------- */
   const _pink = new THREE.Color(0.98, 0.78, 0.78), _mint = new THREE.Color(0.78, 0.92, 0.80), _rubble = new THREE.Color(0.80, 0.72, 0.84);
-  function floorColor(x, z, c) {
+  const _bright = new THREE.Color(1.0, 0.96, 0.82), _beach = new THREE.Color(0.97, 0.92, 0.76);
+  const _grassC = new THREE.Color(0.24, 0.52, 0.22), _rockC = new THREE.Color(0.52, 0.46, 0.40);
+  function floorColor(x, z, c, h, sl) {
     c.setRGB(0.95, 0.86, 0.66);
     const n1 = Math.sin(x * 0.007 + 1) * Math.sin(z * 0.009 + 2);
     if (n1 > 0.15) c.lerp(_pink, smooth(0.15, 0.7, n1) * 0.6);
@@ -729,18 +923,37 @@ export function buildLevel2(scene, renderer) {
     }
     c.lerp(_rubble, t * 0.55);
     c.multiplyScalar(0.9 + 0.1 * (0.5 + 0.5 * Math.sin(x * 0.35 + Math.sin(z * 0.21) * 2.2)));
+    /* helles Flachwasser */
+    c.lerp(_bright, smooth(-18, -2, h) * 0.5);
+    /* Insel: Strand und Gras */
+    if (h > -1.5) {
+      c.lerp(_beach, smooth(-1.5, 0.3, h));
+      const gr = smooth(2.4, 4.6, h + 0.9 * Math.sin(x * 0.3) * Math.sin(z * 0.27));
+      if (gr > 0) {
+        c.lerp(_grassC, gr * 0.9);
+        c.multiplyScalar(0.85 + 0.3 * (0.5 + 0.5 * Math.sin(x * 0.6 + z * 0.5)));
+      }
+    }
+    /* steile Hänge und Berggipfel: Fels */
+    const rk = Math.max(smooth(0.55, 1.1, sl) * 0.85, smooth(11, 15, h));
+    if (rk > 0) c.lerp(_rockC, rk);
+    c.multiplyScalar(0.9 + 0.1 * Math.sin(h * 2.2 + x * 0.04));
+    if (h < -44) c.multiplyScalar(0.85 + 0.15 * smooth(-54, -44, h));
   }
   const causticTex = causticTexture();
   causticTex.repeat.set(60, 60);
   {
-    const fg = new THREE.PlaneGeometry(1300, 1300, 130, 130);
+    const fg = new THREE.PlaneGeometry(1300, 1300, 240, 240);
     fg.rotateX(-Math.PI / 2);
     const p = fg.attributes.position;
     const col = new Float32Array(p.count * 3), c = new THREE.Color();
+    const E = 2.5;
     for (let i = 0; i < p.count; i++) {
       const x = p.getX(i), z = p.getZ(i);
-      p.setY(i, floorH(x, z));
-      floorColor(x, z, c);
+      const h = floorH(x, z);
+      const sl = Math.hypot(floorH(x + E, z) - h, floorH(x, z + E) - h) / E;
+      p.setY(i, h);
+      floorColor(x, z, c, h, sl);
       col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
     }
     fg.setAttribute('color', new THREE.BufferAttribute(col, 3));
@@ -834,12 +1047,17 @@ export function buildLevel2(scene, renderer) {
     for (let i = 0; i < WRECK_SITES.length; i++) {                                             // Wrack-Stellen
       if (Math.hypot(x - WRECK_SITES[i].x, z - WRECK_SITES[i].z) < 9) return true;
     }
+    for (let i = 0; i < ISLANDS.length; i++) {                                                 // Inseln (eigene Bepflanzung)
+      if (Math.hypot(x - ISLANDS[i].x, z - ISLANDS[i].z) < ISLANDS[i].R * 1.5) return true;
+    }
     return false;
   }
 
   function put(type, x, z, s, cols, extra) {
     if (blocked(x, z)) return null;
-    const o = { x, y: floorH(x, z) - 0.12, z, s, ry: rng() * 6.283, tx: (rng() - 0.5) * 0.14, tz: (rng() - 0.5) * 0.14, c: cols[Math.floor(rng() * cols.length)] };
+    const fy = floorH(x, z);
+    if (fy > -4) return null;
+    const o = { x, y: fy - 0.12, z, s, ry: rng() * 6.283, tx: (rng() - 0.5) * 0.14, tz: (rng() - 0.5) * 0.14, c: cols[Math.floor(rng() * cols.length)] };
     if (extra) Object.assign(o, extra);
     pl[type].push(o);
     return o;
@@ -891,6 +1109,7 @@ export function buildLevel2(scene, renderer) {
     const a = rng() * 6.283, r = 40 + rng() * 400;
     const x = Math.cos(a) * r, z = Math.sin(a) * r;
     if (blocked(x, z)) continue;
+    if (floorH(x, z) > -4) continue;
     for (let k = 0; k < 6; k++) pushGrass(x + (rng() - 0.5) * 2, z + (rng() - 0.5) * 2);
   }
   // leuchtende Korallen-Gruppen auf dem freien Riffboden
@@ -1009,6 +1228,227 @@ export function buildLevel2(scene, renderer) {
   const archPos = new THREE.Vector3(ARCH.x, archAY + 6, ARCH.z);
 
   /* ==========================================================
+     KANTIGE FELSWÄNDE & KLIPPEN (Low-Poly, mit Bewuchs + Kollision)
+     Alle Blöcke werden zu EINEM Mesh zusammengefasst (ein Draw-Call).
+     ========================================================== */
+  const cragItems = [];
+  const cragMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, flatShading: true });
+  const _cc = new THREE.Color();
+
+  function cragColor(baseY, topY, seed, tint) {
+    const span = Math.max(1, topY - baseY);
+    return (x, y, z) => {
+      const t = clamp((y - baseY) / span, 0, 1);
+      const band = 0.5 + 0.5 * Math.sin(y * 0.85 + x * 0.04 + z * 0.03 + seed);
+      let r = 0.56 + 0.14 * band, g = 0.49 + 0.09 * band, b = 0.42 + 0.04 * band;
+      if (band > 0.8) r += 0.07 + (tint % 3) * 0.02;                 // rötliche Gesteinsschichten
+      const tp = smooth(0.75, 1, t) * 0.4;                            // helle, ausgebleichte Kante oben
+      r = lerp(r, 0.82, tp); g = lerp(g, 0.77, tp); b = lerp(b, 0.70, tp);
+      const al = (1 - smooth(0, 0.28, t)) * 0.55;                     // Algen am Fuß
+      r = lerp(r, 0.26, al); g = lerp(g, 0.45, al); b = lerp(b, 0.32, al);
+      const hv = 0.92 + 0.16 * hash3(Math.round(x * 3), Math.round(y * 3), Math.round(z * 3));
+      return _cc.setRGB(r * hv, g * hv, b * hv);
+    };
+  }
+
+  const CLIFF_TYPES = [['branch', 0.22], ['stag', 0.38], ['brain', 0.48], ['sponge', 0.62], ['fan', 0.80], ['tube', 0.88], ['anem', 0.92], ['grass', 1.01]];
+
+  /* Bewuchs auf der Oberfläche eines Blocks (Korallen wachsen entlang der Flächennormale) */
+  function cover(B, n) {
+    const cyaw = Math.cos(B.yaw), syaw = Math.sin(B.yaw);
+    for (let i = 0; i < n; i++) {
+      const ny = -0.25 + 1.25 * rng();
+      const nh = Math.sqrt(Math.max(0, 1 - ny * ny));
+      const a = rng() * 6.283;
+      const nx0 = Math.cos(a) * nh, nz0 = Math.sin(a) * nh;
+      const f = 1 - B.taper * smooth(-1, 1, ny);
+      const lx = nx0 * B.rx * f * 0.96, lz = nz0 * B.rz * f * 0.96, ly = ny * B.ry;
+      const wx = B.x + lx * cyaw + lz * syaw, wz = B.z - lx * syaw + lz * cyaw, wy = B.cy + ly;
+      if (wy < floorH(wx, wz) + 1.2) continue;
+      let nxl = nx0 / (B.rx * f), nyl = ny / B.ry, nzl = nz0 / (B.rz * f);
+      const nl = Math.hypot(nxl, nyl, nzl) || 1;
+      nxl /= nl; nyl /= nl; nzl /= nl;
+      const nv = new THREE.Vector3(nxl * cyaw + nzl * syaw, nyl + 0.9, -nxl * syaw + nzl * cyaw).normalize();
+      const q = new THREE.Quaternion().setFromUnitVectors(UP, nv).multiply(new THREE.Quaternion().setFromAxisAngle(UP, rng() * 6.283));
+      const r = rng();
+      let type = 'grass';
+      for (let k = 0; k < CLIFF_TYPES.length; k++) if (r < CLIFF_TYPES[k][1]) { type = CLIFF_TYPES[k][0]; break; }
+      if (type === 'grass') {
+        pl.grass.push({ x: wx, y: wy - 0.1, z: wz, s: 0.8 + rng() * 0.9, sy: 0.9 + rng() * 0.9, ry: 0, tx: 0, tz: 0, q, c: GRASS_COLS[Math.floor(rng() * GRASS_COLS.length)] });
+      } else {
+        pl[type].push({ x: wx, y: wy - 0.15, z: wz, s: 1.0 + rng() * 1.3, ry: 0, tx: 0, tz: 0, q, c: COLS[type][Math.floor(rng() * COLS[type].length)] });
+      }
+    }
+  }
+
+  function addBlock(B) {
+    const g = geoRockBlock(B.rx, B.ry, B.rz, B.taper, B.yaw, B.lean, B.seed);
+    g.translate(B.x, B.cy, B.z);
+    cragItems.push({ geo: g, col: cragColor(B.cy - B.ry, B.cy + B.ry, B.seed, B.tint || 0) });
+    if (B.collide) {
+      const rs = 0.82 * Math.min(B.rx, B.rz);
+      const lo = B.cy - B.ry + rs * 0.9, hi = B.cy + B.ry - rs * 0.7;
+      if (hi <= lo) addSphere(B.x, B.cy, B.z, Math.min(rs, B.ry * 1.1));
+      else {
+        const nS = Math.max(2, Math.ceil((hi - lo) / rs) + 1);
+        for (let k = 0; k < nS; k++) {
+          const y = lo + (hi - lo) * k / (nS - 1);
+          const nyy = (y - B.cy) / B.ry;
+          addSphere(B.x, y, B.z, rs * (1 - B.taper * 0.8 * smooth(-1, 1, nyy)));
+        }
+      }
+    }
+    if (B.cover) cover(B, dn(Math.round(12 + B.ry * 1.6)));
+  }
+
+  const CLIFFS = [
+    { x: -60, z: -130, ry: 0.6, n: 6, w: 8, h: 24 },
+    { x: 95, z: -70, ry: -0.4, n: 7, w: 8, h: 28 },
+    { x: -165, z: -150, ry: 1.3, n: 6, w: 9, h: 30 },
+    { x: -10, z: -170, ry: 0.1, n: 5, w: 8, h: 22 },
+    { x: 60, z: -250, ry: 2.3, n: 7, w: 9, h: 30 },
+    { x: -120, z: -340, ry: 0.2, n: 6, w: 9, h: 28 },
+    { x: -110, z: -400, ry: 1.0, n: 5, w: 8, h: 26 },
+    { x: 150, z: -200, ry: 0.9, n: 6, w: 8, h: 26 },
+    { x: 275, z: -250, ry: 1.6, n: 6, w: 9, h: 28 },
+    { x: -250, z: -270, ry: 0.7, n: 6, w: 9, h: 30 },
+    { x: -60, z: -370, ry: -0.5, n: 5, w: 8, h: 24 },
+    { x: -215, z: -130, ry: 1.4, n: 5, w: 8, h: 26 },
+    { x: -110, z: 50, ry: -0.9, n: 6, w: 8, h: 26 },
+    { x: 130, z: 70, ry: 0.4, n: 6, w: 8, h: 26 }
+  ];
+
+  const nearKeep = (x, z) => {
+    if (x > -42 && x < 42 && z > -48 && z < 64) return true;                       // Dock + Startbereich
+    for (let i = 0; i < ARCHES.length; i++) if (Math.hypot(x - ARCHES[i].x, z - ARCHES[i].z) < 40) return true;
+    if (Math.hypot(x - CHEST_XZ.x, z - CHEST_XZ.z) < 32) return true;
+    for (let i = 0; i < WRECK_SITES.length; i++) if (Math.hypot(x - WRECK_SITES[i].x, z - WRECK_SITES[i].z) < 22) return true;
+    return false;
+  };
+  const nearIsland = (x, z, f) => ISLANDS.some((I) => Math.hypot(x - I.x, z - I.z) < I.R * f);
+
+  CLIFFS.forEach((C) => {
+    const dX = Math.cos(C.ry), dZ = -Math.sin(C.ry);
+    for (let k = 0; k < C.n; k++) {
+      const s = (k - (C.n - 1) / 2) * C.w * 1.2;
+      const bx = C.x + dX * s + (rng() - 0.5) * C.w * 0.5;
+      const bz = C.z + dZ * s + (rng() - 0.5) * C.w * 0.6;
+      if (nearKeep(bx, bz) || nearIsland(bx, bz, 2.4)) continue;
+      const rx = C.w * (0.6 + 0.25 * rng()), rz = rx * (0.85 + 0.3 * rng());
+      let fMin = floorH(bx, bz);
+      fMin = Math.min(fMin, floorH(bx + rx, bz), floorH(bx - rx, bz), floorH(bx, bz + rz), floorH(bx, bz - rz));
+      const prof = 0.5 + 0.5 * Math.sin(Math.PI * (k + 0.5) / C.n);
+      const hgt = C.h * (0.55 + 0.45 * prof) * (0.8 + 0.4 * rng());
+      const baseY = fMin - 3;
+      let ryB = hgt / 2 + 1.5;
+      ryB = Math.min(ryB, (-7 - baseY) / 2);          // Oberkante bleibt unter -7 m, man kann drüber fahren
+      if (ryB < 4) continue;
+      const cy = baseY + ryB;
+      addBlock({
+        x: bx, z: bz, cy, rx, ry: ryB, rz, taper: 0.22 + rng() * 0.12, yaw: rng() * 6.283,
+        lean: (rng() - 0.5) * 0.1, seed: rng() * 50, tint: k, collide: true, cover: true
+      });
+      if (ryB > 8) {                                   // zweite, schmalere Stufe für Zacken und Felsbänder
+        const c2 = cy + ryB * 0.7;
+        const ry2 = Math.min(ryB * 0.42, -7 - c2);
+        if (ry2 >= 3) {
+          addBlock({
+            x: bx + (rng() - 0.5) * rx * 0.5, z: bz + (rng() - 0.5) * rz * 0.5, cy: c2,
+            rx: rx * 0.62, ry: ry2, rz: rz * 0.62, taper: 0.3, yaw: rng() * 6.283,
+            lean: (rng() - 0.5) * 0.14, seed: rng() * 50, tint: k + 1, collide: true, cover: true
+          });
+        }
+      }
+    }
+  });
+
+  /* ==========================================================
+     TROPISCHE INSELN: Palmen, Büsche, Gras, Felsen und Flachwasser-Riff.
+     Der massive Sockel steckt bereits im Höhenfeld (islandH).
+     ========================================================== */
+  const palmList = [], bushList = [];
+  const SHORE_TYPES = ['branch', 'brain', 'fan', 'sponge', 'stag', 'tube'];
+
+  ISLANDS.forEach((I) => {
+    // Palmen
+    for (let t = 0, np = 0; t < 700 && np < 18; t++) {
+      const a = rng() * 6.283, u = 0.15 + rng() * 0.75;
+      const x = I.x + Math.cos(a) * I.R * u, z = I.z + Math.sin(a) * I.R * u;
+      const h = floorH(x, z);
+      if (h < 1.3 || h > 11) continue;
+      palmList.push({ x, y: h - 0.4, z, rx: 0, ry: rng() * 6.283, rz: 0, s: 0.9 + rng() * 0.7 });
+      np++;
+    }
+    // Büsche
+    for (let t = 0, nb = 0; t < 700 && nb < 28; t++) {
+      const a = rng() * 6.283, u = 0.1 + rng() * 0.8;
+      const x = I.x + Math.cos(a) * I.R * u, z = I.z + Math.sin(a) * I.R * u;
+      const h = floorH(x, z);
+      if (h < 1.6 || h > 13) continue;
+      bushList.push({ x, y: h - 0.2, z, rx: 0, ry: rng() * 6.283, rz: 0, s: 1.0 + rng() * 1.2 });
+      nb++;
+    }
+    // Gras auf der Insel
+    for (let t = 0, ng = 0; t < 600 && ng < 70; t++) {
+      const a = rng() * 6.283, u = 0.2 + rng() * 0.72;
+      const x = I.x + Math.cos(a) * I.R * u, z = I.z + Math.sin(a) * I.R * u;
+      const h = floorH(x, z);
+      if (h < 1.5 || h > 9) continue;
+      for (let k = 0; k < 4; k++) pushGrass(x + (rng() - 0.5) * 1.4, z + (rng() - 0.5) * 1.4, floorH(x, z) - 0.05);
+      ng++;
+    }
+    // Strand-Felsbrocken (kantig)
+    for (let t = 0, nr = 0; t < 400 && nr < 8; t++) {
+      const a = rng() * 6.283, u = 0.8 + rng() * 0.18;
+      const x = I.x + Math.cos(a) * I.R * u, z = I.z + Math.sin(a) * I.R * u;
+      const h = floorH(x, z);
+      if (h < 0.2 || h > 2.8) continue;
+      const rr = 1.0 + rng() * 1.6;
+      addBlock({ x, z, cy: h + rr * 0.35, rx: rr, ry: rr * 0.9, rz: rr * (0.8 + rng() * 0.4), taper: 0.15, yaw: rng() * 6.283, lean: 0, seed: rng() * 50, tint: nr, collide: false, cover: false });
+      nr++;
+    }
+    // Gipfelfelsen
+    for (let t = 0, ns = 0; t < 400 && ns < 6; t++) {
+      const a = rng() * 6.283, u = rng() * 0.4;
+      const x = I.x + Math.cos(a) * I.R * u, z = I.z + Math.sin(a) * I.R * u;
+      const h = floorH(x, z);
+      if (h < 5) continue;
+      const rr = 2.2 + rng() * 2.6;
+      addBlock({ x, z, cy: h + rr * 0.7, rx: rr, ry: rr * (1.1 + rng() * 0.6), rz: rr * (0.8 + rng() * 0.4), taper: 0.3, yaw: rng() * 6.283, lean: (rng() - 0.5) * 0.15, seed: rng() * 50, tint: ns, collide: false, cover: false });
+      ns++;
+    }
+    // Flachwasser-Riff am Inselhang: Korallen entlang der Sockel-Neigung
+    for (let t = 0, nc = 0; t < 900 && nc < dn(110); t++) {
+      const a = rng() * 6.283, u = 1.08 + rng() * 1.0;
+      const x = I.x + Math.cos(a) * I.R * u, z = I.z + Math.sin(a) * I.R * u;
+      const h = floorH(x, z);
+      if (h > -3.5 || h < -34) continue;
+      const type = SHORE_TYPES[Math.floor(rng() * SHORE_TYPES.length)];
+      pl[type].push({ x, y: h - 0.12, z, s: 0.8 + rng() * 1.2, ry: rng() * 6.283, tx: (rng() - 0.5) * 0.14, tz: (rng() - 0.5) * 0.14, c: COLS[type][Math.floor(rng() * COLS[type].length)] });
+      nc++;
+    }
+    // Seegras im Flachwasser
+    for (let t = 0, ng = 0; t < 500 && ng < 40; t++) {
+      const a = rng() * 6.283, u = 1.05 + rng() * 0.5;
+      const x = I.x + Math.cos(a) * I.R * u, z = I.z + Math.sin(a) * I.R * u;
+      const h = floorH(x, z);
+      if (h > -1.2 || h < -16) continue;
+      for (let k = 0; k < 5; k++) pushGrass(x + (rng() - 0.5) * 1.6, z + (rng() - 0.5) * 1.6);
+      ng++;
+    }
+  });
+
+  const palmMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, side: THREE.DoubleSide, flatShading: true });
+  const bushMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, flatShading: true });
+
+  /* Alle kantigen Felsblöcke (Klippen, Gipfel, Strand) als ein Mesh */
+  {
+    const cragMesh = new THREE.Mesh(mergeColored(cragItems), cragMat);
+    cragMesh.frustumCulled = false;
+    root.add(cragMesh);
+  }
+
+  /* ==========================================================
      Wrack-Teile: Spanten, Anker, Kanonen, Amphoren, Planken
      ========================================================== */
   const wreckTex = woodTexture();
@@ -1034,6 +1474,9 @@ export function buildLevel2(scene, renderer) {
     mesh.frustumCulled = false;
     root.add(mesh);
   }
+
+  decorInst(geoPalm(), palmMat, palmList, false);
+  decorInst(geoBush(), bushMat, bushList, false);
 
   const anchorList = [], cannonList = [], amphList = [], plankList = [];
   const SITE_CORAL = ['branch', 'brain', 'sponge', 'fan', 'stag', 'tube'];
@@ -1151,7 +1594,8 @@ export function buildLevel2(scene, renderer) {
     const col = new THREE.Color();
     list.forEach((o, i) => {
       dummy.position.set(o.x, o.y, o.z);
-      dummy.rotation.set(o.tx || 0, o.ry || 0, o.tz || 0);
+      if (o.q) dummy.quaternion.copy(o.q);
+      else dummy.rotation.set(o.tx || 0, o.ry || 0, o.tz || 0);
       dummy.scale.set(o.s, o.sy || o.s, o.s);
       dummy.updateMatrix();
       mesh.setMatrixAt(i, dummy.matrix);
@@ -1254,6 +1698,7 @@ export function buildLevel2(scene, renderer) {
     const a = t * s.w + s.ph;
     out.x = s.base.x + Math.sin(a) * s.R;
     out.z = s.base.z + Math.cos(a * 0.83) * s.R * 0.8;
+    avoidIslands(out, 2.1);
     out.y = Math.min(-3, floorH(out.x, out.z) + s.h + Math.sin(a * 0.7) * 2.5);
     return out;
   }
@@ -1388,7 +1833,7 @@ export function buildLevel2(scene, renderer) {
     const g = new THREE.Group();
     const bell = new THREE.Mesh(jellyBell, mat); bell.scale.set(s, s * 0.8, s); g.add(bell);
     const tent = new THREE.Mesh(jellyTent, mat); tent.scale.set(s, s, s); g.add(tent);
-    const base = new THREE.Vector3(x, floorH(x, z) + 8 + rng() * 14, z);
+    const base = new THREE.Vector3(x, Math.min(-6, floorH(x, z) + 8 + rng() * 14), z);
     g.position.copy(base);
     root.add(g);
     jellies.push({ g, pos: g.position, base, bell, tent, ph: rng() * 6.28, s, r: s * 1.25 + 0.3 });
@@ -1493,6 +1938,15 @@ export function buildLevel2(scene, renderer) {
   /* ==========================================================
      Kollision
      ========================================================== */
+  function groundAt(x, z, R, isSub) {
+    let fh = floorH(x, z);
+    if (isSub) {
+      const q = R * 0.7;
+      fh = Math.max(fh, floorH(x + q, z), floorH(x - q, z), floorH(x, z + q), floorH(x, z - q));
+    }
+    return fh;
+  }
+
   function collideSub(p, vel, R) {
     const isSub = R > 2;
     let impact = 0;
@@ -1505,16 +1959,36 @@ export function buildLevel2(scene, renderer) {
       if (vr > 0) { vel.x -= nx * vr; vel.z -= nz * vr; impact = Math.max(impact, vr); }
     }
 
-    let fh = floorH(p.x, p.z);
-    if (isSub) {
-      const q = R * 0.7;
-      fh = Math.max(fh, floorH(p.x + q, p.z), floorH(p.x - q, p.z), floorH(p.x, p.z + q), floorH(p.x, p.z - q));
+    const maxY = isSub ? 0.5 : -0.8;
+    let fh = groundAt(p.x, p.z, R, isSub);
+
+    /* Insel: Der Boden reicht höher als die Wasseroberfläche. Dann wird das U-Boot
+       seitlich aus dem massiven Inselkörper geschoben statt nach oben gedrückt. */
+    if (fh + R > maxY + 0.01) {
+      let best = null, bd = 1e9;
+      for (let i = 0; i < ISLANDS.length; i++) {
+        const I = ISLANDS[i];
+        const d = Math.hypot(p.x - I.x, p.z - I.z) / I.R;
+        if (d < bd) { bd = d; best = I; }
+      }
+      if (best) {
+        let nx = p.x - best.x, nz = p.z - best.z;
+        const d = Math.hypot(nx, nz) || 0.0001;
+        nx /= d; nz /= d;
+        for (let moved = 0; moved < 200; moved += 1.5) {
+          if (groundAt(p.x, p.z, R, isSub) + R <= maxY) break;
+          p.x += nx * 1.5; p.z += nz * 1.5;
+        }
+        const vn = vel.x * nx + vel.z * nz;
+        if (vn < 0) { impact = Math.max(impact, -vn); vel.x -= nx * vn; vel.z -= nz * vn; }
+        fh = groundAt(p.x, p.z, R, isSub);
+      }
     }
+
     if (p.y < fh + R) {
       p.y = fh + R;
       if (vel.y < 0) { impact = Math.max(impact, -vel.y); vel.y = 0; }
     }
-    const maxY = isSub ? 0.5 : -0.8;
     if (p.y > maxY) { p.y = maxY; if (vel.y > 0 && isSub) vel.y = 0; }
 
     for (let i = 0; i < spheres.length; i++) {
@@ -1713,6 +2187,7 @@ export function buildLevel2(scene, renderer) {
       names: { de: ['Felsbogen', 'Schatz', 'Riffhai'], en: ['Arch', 'Treasure', 'Reef shark'] }
     },
     spawn: { position: new THREE.Vector3(0, -3.2, 12), yaw: 0 },
+    islands: ISLANDS,
     schools,
     fauna: {
       pods: [
