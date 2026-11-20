@@ -12,6 +12,8 @@
    - Heck: 3 schlichte Sitzreihen (6 Plätze) für die Touristen
    - Frontscheinwerfer (F), Greifarm (G), Propeller
    - Upgrades: Goldene Klobrille, Nebelscheinwerfer, Mega-Flutlicht
+   - Rechtes Display zeigt die Sehenswürdigkeiten des aktuellen Levels
+     (Symbole/Namen kommen per updateDisplays: sightIcons / sightNames)
 
    Lokale Koordinaten (1 Einheit = 1 Meter):
      Vorwärts = -Z, rechts = +X, oben = +Y, Mitte der Hülle = (0,0,0)
@@ -1089,7 +1091,8 @@
      let dispAcc = 1;
      const ds = {
        depth: 0, o2: 1, speed: 0, heading: 0, sightsDone: [false, false, false], pings: [],
-       money: 0, rating: 4, lang: 'de', light: false, arm: false
+       money: 0, rating: 4, lang: 'de', light: false, arm: false,
+       sightIcons: null, sightNames: null      // pro Level von script.js gesetzt; null = Level-1-Standard
      };
      const _a = new THREE.Vector3();
    
@@ -1219,12 +1222,13 @@
        }
      }
    
-     // Rechts: Sehenswürdigkeiten, Geld, Bewertung
+     // Rechts: Sehenswürdigkeiten (je nach Level), Geld, Bewertung
      function drawRight(d) {
        drawBase(d, T('TOUR', 'TOUR'));
        const { ctx, w } = d;
-       const icons = ['🚢', '💎', '🐋'];
-       const names = [T('Wrack', 'Wreck'), T('Kathedrale', 'Cathedral'), T('Riesenwal', 'Giant whale')];
+       // Level 1: Wrack / Kathedrale / Riesenwal · Level 2: Felsbogen / Schatz / Riffhai (kommt per updateDisplays)
+       const icons = ds.sightIcons || ['🚢', '💎', '🐋'];
+       const names = ds.sightNames || [T('Wrack', 'Wreck'), T('Kathedrale', 'Cathedral'), T('Riesenwal', 'Giant whale')];
        ctx.textAlign = 'center';
        for (let i = 0; i < 3; i++) {
          const x = 56 + i * 104, done = !!ds.sightsDone[i];
@@ -1450,7 +1454,8 @@
        setCaptainVisible(v) { captain.visible = !!v; },
        get captainVisible() { return captain.visible; },
    
-       // Displays: { depth, o2, speed, heading, sightsDone:[b,b,b], pings:[{id,ang,dist,done}], money, rating, lang, light, arm }
+       // Displays: { depth, o2, speed, heading, sightsDone:[b,b,b], pings:[{id,ang,dist,done}], money, rating, lang, light, arm,
+       //             sightIcons:['🌉','💰','🦈'], sightNames:['Felsbogen','Schatz','Riffhai'] }
        updateDisplays(s) { Object.assign(ds, s); },
    
        // Scheinwerfer [F]
