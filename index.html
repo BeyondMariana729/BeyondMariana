@@ -5,86 +5,170 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>BEYOND MARIANA – MARIANA TOURS</title>
 <style>
+:root{
+ --cy:#19e6ff;--cy-dim:rgba(25,230,255,.38);
+ --am:#ffb02e;--am-dim:rgba(255,176,46,.55);
+ --ink:#d9f7ff;--ok:#5dffb0;--red:#ff5468;
+ --mono:ui-monospace,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{margin:0;height:100%;background:#02101a;color:#fff;overflow:hidden;
+html,body{margin:0;height:100%;background:#03080b;color:var(--ink);overflow:hidden;
  font-family:"Avenir Next","Segoe UI",system-ui,sans-serif;-webkit-user-select:none;user-select:none}
+input{-webkit-user-select:text;user-select:text}
 #game{position:fixed;inset:0;z-index:0}
 .hidden{display:none !important}
 button{font-family:inherit;cursor:pointer}
 
-/* ---------- Menü ---------- */
-#menu{position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;
- background:radial-gradient(ellipse at 50% 20%,#0d4a6b 0%,#062a40 45%,#02101a 100%);padding:20px;overflow:auto}
-#menu .box{width:min(560px,100%);text-align:center}
-#menu h1{margin:0;font-size:clamp(34px,8vw,64px);letter-spacing:.08em;font-weight:900;
- background:linear-gradient(180deg,#e9fbff,#5be4ff 70%,#2a9cc8);-webkit-background-clip:text;background-clip:text;color:transparent}
-#menu .sub{margin:6px 0 26px;opacity:.8;letter-spacing:.06em;font-size:14px}
+/* ---------- Cockpit-Bauteil: Metallplatte mit abgeschrägten Ecken ---------- */
+.cut{--c:14px;--e:2px;position:relative;isolation:isolate;background:var(--edge,var(--cy-dim));
+ clip-path:polygon(var(--c) 0,100% 0,100% calc(100% - var(--c)),calc(100% - var(--c)) 100%,0 100%,0 var(--c))}
+.cut::before{content:"";position:absolute;inset:var(--e);z-index:-1;
+ background:var(--fill,linear-gradient(180deg,#1c2a32 0%,#0d161b 55%,#080e12 100%));
+ clip-path:polygon(calc(var(--c) - 1px) 0,100% 0,100% calc(100% - var(--c) + 1px),calc(100% - var(--c) + 1px) 100%,0 100%,0 calc(var(--c) - 1px))}
+
+/* ---------- Menü: Sonar-Schirm ---------- */
+#menu{position:fixed;inset:0;z-index:100;display:flex;padding:20px;overflow:auto;
+ background:
+  radial-gradient(circle at 50% 38%,rgba(25,230,255,.10) 0,transparent 55%),
+  repeating-radial-gradient(circle at 50% 38%,transparent 0 62px,rgba(25,230,255,.075) 62px 63px),
+  linear-gradient(90deg,transparent 49.8%,rgba(25,230,255,.06) 50%,transparent 50.2%),
+  linear-gradient(0deg,transparent 37.8%,rgba(25,230,255,.06) 38%,transparent 38.2%),
+  #04090c}
+#menu::before{content:"";position:fixed;left:50%;top:38%;width:170vmax;height:170vmax;margin:-85vmax 0 0 -85vmax;
+ border-radius:50%;pointer-events:none;
+ background:conic-gradient(from 0deg,rgba(25,230,255,0) 0deg,rgba(25,230,255,0) 296deg,rgba(25,230,255,.13) 357deg,rgba(25,230,255,.32) 360deg);
+ animation:sweep 8s linear infinite}
+@keyframes sweep{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){#menu::before{animation:none}}
+
+#menu .box{--c:22px;--e:2px;--edge:var(--cy-dim);--fill:linear-gradient(180deg,rgba(14,22,27,.94),rgba(6,11,14,.96));
+ margin:auto;width:min(560px,100%);text-align:center;padding:26px 22px 22px;position:relative;z-index:1}
+#menu .box::after{content:"";position:absolute;inset:0;pointer-events:none;
+ background:
+  radial-gradient(circle at 12px 12px,#7f949e 0 2px,#27343b 3px 4px,transparent 5px),
+  radial-gradient(circle at calc(100% - 12px) 12px,#7f949e 0 2px,#27343b 3px 4px,transparent 5px),
+  radial-gradient(circle at 12px calc(100% - 12px),#7f949e 0 2px,#27343b 3px 4px,transparent 5px),
+  radial-gradient(circle at calc(100% - 12px) calc(100% - 12px),#7f949e 0 2px,#27343b 3px 4px,transparent 5px)}
+
+#menu h1{margin:0;font:900 clamp(30px,7.4vw,56px)/1.05 var(--mono);letter-spacing:.1em;color:var(--ink);
+ text-shadow:0 0 18px rgba(25,230,255,.55),0 0 2px rgba(25,230,255,.9)}
+#menu .sub{margin:8px 0 6px;font:700 12px var(--mono);letter-spacing:.2em;color:var(--am);text-transform:uppercase}
+.ticks{height:10px;margin:0 0 20px;opacity:.7;
+ background:repeating-linear-gradient(90deg,var(--cy) 0 1px,transparent 1px 10px),
+            repeating-linear-gradient(90deg,var(--cy) 0 2px,transparent 2px 50px);
+ background-size:100% 5px,100% 10px;background-position:0 0,0 0;background-repeat:no-repeat}
+
 .screen{display:none;flex-direction:column;gap:12px}
 .screen.active{display:flex}
-.screen h2{margin:0 0 6px;font-size:20px;letter-spacing:.12em;color:#8fefff}
-.btn{padding:15px 20px;border-radius:14px;border:1px solid rgba(143,239,255,.45);
- background:linear-gradient(180deg,rgba(40,120,160,.55),rgba(10,50,80,.7));color:#fff;
- font-size:17px;font-weight:800;letter-spacing:.1em}
-.btn:hover,.btn:focus{outline:none;border-color:#8fefff;box-shadow:0 0 18px rgba(91,228,255,.5)}
-.btn.disabled{opacity:.45;pointer-events:none}
-.btn small{display:block;font-size:11px;font-weight:600;opacity:.7;letter-spacing:.06em;margin-top:2px}
-.btn.primary{background:linear-gradient(180deg,#ff9a3a,#e0661a);border-color:#ffc27a}
+.screen h2{margin:0 0 4px;font:800 14px var(--mono);letter-spacing:.3em;color:var(--am);text-align:left;text-transform:uppercase}
+.screen h2::before{content:"◢ ";color:var(--cy)}
+.lbl2{font:700 11px var(--mono);letter-spacing:.22em;color:var(--cy);opacity:.85;text-align:left;text-transform:uppercase}
+
+/* ---------- Buttons ---------- */
+.btn{--edge:var(--cy-dim);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+ width:100%;padding:16px 22px 16px 36px;border:0;color:var(--ink);
+ font:800 16px/1.2 var(--mono);letter-spacing:.16em;text-transform:uppercase;text-align:center}
+.btn::after{content:"";position:absolute;left:16px;top:50%;width:7px;height:7px;margin-top:-3px;
+ background:var(--cy);box-shadow:0 0 8px var(--cy)}
+.btn:hover,.btn:focus,.btn:focus-visible{outline:none;--edge:var(--am)}
+.btn:hover::after,.btn:focus::after{background:var(--am);box-shadow:0 0 10px var(--am)}
+.btn:active{filter:brightness(1.25)}
+.btn.big{padding:22px 22px 22px 36px;font-size:18px}
+.btn.primary{--edge:var(--am-dim);--fill:linear-gradient(180deg,#3b2a0f 0%,#1d1407 60%,#120c04 100%);color:var(--am)}
+.btn.primary::after{background:var(--am);box-shadow:0 0 10px var(--am)}
+.btn.primary:hover,.btn.primary:focus{--edge:#ffd27a}
+.btn.disabled{opacity:.5;pointer-events:none}
+.btn.disabled::after{background:var(--red);box-shadow:0 0 6px var(--red)}
+.btn small{display:block;font-size:11px;font-weight:600;opacity:.75;letter-spacing:.1em;text-transform:none}
+.btn .go{letter-spacing:.3em}
+
 .row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
-.lang button{flex:1;padding:12px;border-radius:12px;border:1px solid rgba(143,239,255,.4);
- background:rgba(10,50,80,.6);color:#fff;font-weight:800;font-size:16px}
-.lang button.on{background:#2a9cc8;border-color:#8fefff}
-.setrow{display:flex;flex-direction:column;gap:8px;text-align:left;font-size:14px;opacity:.95}
-.setrow label{display:flex;justify-content:space-between;font-weight:700;letter-spacing:.06em}
-.setrow input[type=range]{width:100%;accent-color:#5be4ff;height:28px}
-.range-ends{display:flex;justify-content:space-between;font-size:12px;opacity:.65}
-.help{text-align:left;font-size:12.5px;line-height:1.5;opacity:.82;background:rgba(0,0,0,.25);
- border-radius:12px;padding:10px 12px;margin:0}
-.level-card{display:flex;align-items:center;gap:14px;text-align:left;padding:13px 14px;border-radius:14px;
- border:1px solid rgba(143,239,255,.4);background:rgba(10,50,80,.6);color:#fff}
-.level-card .num{width:42px;height:42px;border-radius:12px;background:#2a9cc8;display:flex;align-items:center;
- justify-content:center;font-size:20px;font-weight:900;flex:0 0 auto}
+.seg-row{display:flex;gap:10px}
+.seg{--c:10px;--edge:var(--cy-dim);flex:1;padding:12px 10px;border:0;color:var(--ink);
+ font:800 14px var(--mono);letter-spacing:.14em}
+.seg.on{--edge:var(--am);--fill:linear-gradient(180deg,#3b2a0f,#1d1407);color:var(--am)}
+.seg:hover,.seg:focus{outline:none;--edge:var(--am)}
+
+/* ---------- Eingabefelder ---------- */
+.inp{--c:10px;--e:1px;--edge:var(--cy-dim);--fill:#04090c}
+.inp:focus-within{--edge:var(--am)}
+.inp input{display:block;width:100%;background:transparent;border:0;outline:0;color:var(--am);
+ font:700 18px var(--mono);letter-spacing:.1em;padding:14px 16px;border-radius:0}
+.inp input::placeholder{color:rgba(217,247,255,.35)}
+.inp.code input{font-size:36px;text-align:center;letter-spacing:.55em;padding:12px 16px 12px calc(16px + .55em)}
+
+/* ---------- Multiplayer ---------- */
+.field{display:flex;flex-direction:column;gap:6px}
+.lcd{--c:12px;--edge:var(--am-dim);--fill:#03080a;text-align:center;
+ font:900 clamp(46px,14vw,80px)/1.1 var(--mono);letter-spacing:.22em;padding:8px 0 8px .22em;
+ color:var(--am);text-shadow:0 0 18px rgba(255,176,46,.55)}
+.mp-status{min-height:22px;font:700 13px var(--mono);letter-spacing:.08em;color:var(--ink);opacity:.9;text-align:center}
+.mp-status.wait{color:var(--am)}
+.mp-status.wait::before{content:"◉ ";animation:blink 1s infinite}
+.mp-status.ok{color:var(--ok)}
+.mp-status.err{color:var(--red)}
+#mp-level-hint{min-height:18px;font:700 12px var(--mono);letter-spacing:.1em;color:var(--ink);opacity:.8;text-align:center}
+
+#mp-bar{position:fixed;left:calc(12px + env(safe-area-inset-left,0px));top:calc(142px + env(safe-area-inset-top,0px));
+ z-index:45;display:flex;flex-direction:column;gap:3px;padding:7px 12px;min-width:140px;
+ background:rgba(6,12,16,.72);border:1px solid var(--cy-dim);border-left:3px solid var(--am);
+ font:800 13px/1.25 var(--mono);letter-spacing:.06em;pointer-events:none}
+#mp-bar span{opacity:.85}
+#mp-bar span.lead{color:var(--am);opacity:1}
+
+/* ---------- Level-Karten ---------- */
+.level-card{--c:12px;--edge:var(--cy-dim);display:flex;align-items:center;gap:14px;text-align:left;
+ padding:13px 14px;border:0;color:var(--ink);width:100%}
+.level-card .num{width:42px;height:42px;border:1px solid var(--cy);background:rgba(25,230,255,.08);
+ display:flex;align-items:center;justify-content:center;font:900 20px var(--mono);flex:0 0 auto;color:var(--cy)}
 .level-card .info{flex:1;min-width:0}
-.level-card .name{font-weight:800;font-size:16px}
-.level-card .desc{font-size:12px;opacity:.75;margin-top:2px}
-.level-card .state{font-size:11px;font-weight:800;letter-spacing:.08em;color:#7dffc4}
+.level-card .name{font:800 15px var(--mono);letter-spacing:.08em}
+.level-card .desc{font-size:12px;opacity:.75;margin-top:3px}
+.level-card .state{font:800 11px var(--mono);letter-spacing:.1em;color:var(--ok)}
 .level-card.locked{opacity:.55}
-.level-card.locked .num{background:#344}
-.level-card.locked .state{color:#9ab}
-.level-card.unlocked .num{background:#8a5cff}
-.level-card.unlocked .state{color:#ffd23a}
-.level-card:hover,.level-card:focus{outline:none;border-color:#8fefff;box-shadow:0 0 18px rgba(91,228,255,.4)}
+.level-card.locked .num{border-color:#5b6a72;color:#7e8e96;background:transparent}
+.level-card.locked .state{color:#8ea0a9}
+.level-card:hover,.level-card:focus{outline:none;--edge:var(--am)}
+
+/* ---------- Einstellungen ---------- */
+.setrow{display:flex;flex-direction:column;gap:8px;text-align:left;font-size:14px}
+.setrow label{display:flex;justify-content:space-between;font:700 12px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--cy)}
+.setrow input[type=range]{width:100%;accent-color:var(--am);height:28px}
+.range-ends{display:flex;justify-content:space-between;font:600 11px var(--mono);opacity:.65}
+.help{text-align:left;font:12px/1.55 var(--mono);opacity:.85;background:rgba(0,0,0,.35);
+ border-left:2px solid var(--cy-dim);padding:10px 12px;margin:0}
 
 /* ---------- HUD ---------- */
 #hud{position:fixed;inset:0;z-index:20;pointer-events:none}
-.hud-card{position:absolute;padding:8px 12px;border-radius:12px;background:rgba(8,18,32,.58);
- border:1px solid rgba(255,255,255,.2);backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px)}
-.hud-card .lbl{font-size:10px;letter-spacing:.12em;opacity:.65;font-weight:700}
+.hud-card{position:absolute;padding:8px 12px;background:rgba(6,12,16,.68);
+ border:1px solid var(--cy-dim);border-top:2px solid var(--cy);backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px)}
+.hud-card .lbl{font:700 10px var(--mono);letter-spacing:.16em;opacity:.7;color:var(--cy)}
 #hud-left{left:calc(12px + env(safe-area-inset-left,0px));top:calc(10px + env(safe-area-inset-top,0px));min-width:150px}
-#hud-left .depth{font-size:30px;font-weight:900;line-height:1.1}
-#hud-left .depth small{font-size:14px;color:#8fefff;margin-left:3px}
-.bar{height:9px;border-radius:6px;background:rgba(255,255,255,.18);overflow:hidden;margin-top:5px}
-.bar i{display:block;height:100%;width:100%;background:linear-gradient(90deg,#2a9cc8,#5be4ff);transition:width .3s}
-.bar i.low{background:linear-gradient(90deg,#ff3a5a,#ff8a9c);animation:blink 0.8s infinite}
+#hud-left .depth{font:900 30px/1.1 var(--mono);color:var(--ink)}
+#hud-left .depth small{font-size:14px;color:var(--am);margin-left:3px}
+.bar{height:9px;background:rgba(255,255,255,.14);overflow:hidden;margin-top:5px}
+.bar i{display:block;height:100%;width:100%;background:linear-gradient(90deg,#14a9bd,var(--cy));transition:width .3s}
+.bar i.low{background:linear-gradient(90deg,#ff3a5a,#ff8a9c);animation:blink .8s infinite}
 @keyframes blink{50%{opacity:.45}}
-#hud-o2-text{font-size:12px;font-weight:800;margin-top:2px;opacity:.9}
+#hud-o2-text{font:800 12px var(--mono);margin-top:3px;opacity:.9}
 #hud-sights{right:calc(12px + env(safe-area-inset-right,0px));top:calc(62px + env(safe-area-inset-top,0px));text-align:center}
 #hud-sights .icons{display:flex;gap:8px;margin-top:4px;justify-content:center}
 .sight{font-size:26px;filter:grayscale(1) opacity(.4);transition:filter .4s,transform .4s}
-.sight.got{filter:none;transform:scale(1.15);text-shadow:0 0 12px #7dffc4}
-#hud-sight-count{font-size:13px;font-weight:800;color:#7dffc4;margin-top:2px}
+.sight.got{filter:none;transform:scale(1.15);text-shadow:0 0 12px var(--ok)}
+#hud-sight-count{font:800 13px var(--mono);color:var(--ok);margin-top:2px}
 #btn-menu{position:fixed;right:calc(12px + env(safe-area-inset-right,0px));top:calc(10px + env(safe-area-inset-top,0px));
- z-index:46;pointer-events:auto;padding:9px 14px;border-radius:12px;border:1px solid rgba(255,255,255,.3);
- background:rgba(8,18,32,.6);color:#fff;font-weight:800;font-size:12px;letter-spacing:.1em}
+ z-index:46;pointer-events:auto;padding:9px 14px;border:1px solid var(--cy-dim);border-right:3px solid var(--am);
+ background:rgba(6,12,16,.72);color:var(--ink);font:800 12px var(--mono);letter-spacing:.14em}
 #hud-objective{position:absolute;left:50%;bottom:calc(12px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);
- max-width:min(640px,86vw);text-align:center;padding:8px 16px;border-radius:999px;background:rgba(8,18,32,.6);
- border:1px solid rgba(143,239,255,.35);font-size:14px;font-weight:700;color:#d8f8ff}
+ max-width:min(640px,86vw);text-align:center;padding:8px 16px;background:rgba(6,12,16,.72);
+ border:1px solid var(--cy-dim);border-bottom:2px solid var(--am);font:700 13px var(--mono);color:var(--ink)}
 #hud-objective:empty{display:none}
 #hud-message{position:absolute;left:50%;top:22%;transform:translateX(-50%);max-width:min(620px,88vw);text-align:center;
- padding:12px 20px;border-radius:16px;background:rgba(8,18,32,.74);border:1px solid rgba(143,239,255,.4);
- font-size:16px;font-weight:700;opacity:0;transition:opacity .3s;pointer-events:none}
+ padding:12px 20px;background:rgba(6,12,16,.82);border:1px solid var(--cy);border-left:4px solid var(--am);
+ font:700 15px/1.4 var(--mono);opacity:0;transition:opacity .3s;pointer-events:none}
 #hud-message.show{opacity:1}
-#hud-mode{position:absolute;left:50%;top:74px;transform:translateX(-50%);font-size:12px;letter-spacing:.14em;font-weight:800;
- opacity:0;transition:opacity .4s;color:#8fefff;margin-top:36px}
+#hud-mode{position:absolute;left:50%;top:74px;transform:translateX(-50%);font:800 12px var(--mono);letter-spacing:.2em;
+ opacity:0;transition:opacity .4s;color:var(--cy);margin-top:36px}
 #hud-mode.show{opacity:.95}
 #hud-high{position:absolute;left:50%;top:calc(52px + env(safe-area-inset-top,0px));transform:translateX(-50%);
  padding:4px 12px;border-radius:999px;background:linear-gradient(90deg,#ff4fd8,#7a5cff,#4fe8ff);font-weight:900;font-size:14px;
@@ -94,12 +178,12 @@ button{font-family:inherit;cursor:pointer}
 
 /* ---------- Touch-Steuerung ---------- */
 #touch{position:fixed;inset:0;z-index:40;pointer-events:none}
-#touch .tbtn{pointer-events:auto;border:1px solid rgba(255,255,255,.32);background:rgba(8,18,32,.5);color:#fff;
- border-radius:16px;font-weight:800;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;
+#touch .tbtn{pointer-events:auto;border:1px solid var(--cy-dim);background:rgba(6,12,16,.58);color:#fff;
+ border-radius:10px;font-weight:800;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;
  backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
-#touch .tbtn:active,#touch .tbtn.on{background:rgba(91,228,255,.5);border-color:#8fefff}
+#touch .tbtn:active,#touch .tbtn.on{background:rgba(255,176,46,.38);border-color:var(--am)}
 #touch .tbtn span{font-size:20px;line-height:1}
-#touch .tbtn em{font-style:normal;font-size:9px;letter-spacing:.06em;opacity:.85}
+#touch .tbtn em{font:normal 700 9px var(--mono);letter-spacing:.06em;opacity:.85}
 .dpad{position:absolute;left:calc(18px + env(safe-area-inset-left,0px));bottom:calc(58px + env(safe-area-inset-bottom,0px));
  width:176px;height:176px;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);gap:6px}
 .dpad .tbtn{font-size:22px}
@@ -113,44 +197,47 @@ button{font-family:inherit;cursor:pointer}
 .actions .tbtn{width:80px;height:62px}
 
 /* ---------- Tour-Abrechnung ---------- */
-#result{position:fixed;inset:0;z-index:110;display:flex;align-items:center;justify-content:center;
- background:rgba(2,12,22,.82);padding:14px;overflow:auto}
-#result .panel{width:min(600px,100%);max-height:100%;overflow:auto;background:linear-gradient(180deg,#0b3550,#06202f);
- border:1px solid rgba(143,239,255,.45);border-radius:20px;padding:20px 20px 16px;text-align:center;position:relative}
-#result h2{margin:0 0 10px;letter-spacing:.12em;color:#ffd23a;font-size:22px}
-#result h3{margin:16px 0 8px;letter-spacing:.12em;color:#8fefff;font-size:15px}
+#result{position:fixed;inset:0;z-index:110;display:flex;padding:14px;overflow:auto;background:rgba(2,8,12,.86)}
+#result .panel{margin:auto;width:min(600px,100%);max-height:100%;overflow:auto;
+ background:linear-gradient(180deg,#14202626,#0a1115);background-color:#0a1115;
+ border:2px solid var(--cy-dim);border-top:3px solid var(--am);padding:20px 20px 16px;text-align:center;position:relative}
+#result h2{margin:0 0 10px;font:900 20px var(--mono);letter-spacing:.2em;color:var(--am)}
+#result h3{margin:16px 0 8px;font:800 14px var(--mono);letter-spacing:.2em;color:var(--cy)}
 .res-stars{display:flex;align-items:baseline;justify-content:center;gap:10px}
 .starbar{font-size:34px;letter-spacing:4px;
  background:linear-gradient(90deg,#ffcf3a var(--p,70%),rgba(255,255,255,.25) var(--p,70%));
  -webkit-background-clip:text;background-clip:text;color:transparent}
-#res-num{font-size:28px;font-weight:900;color:#ffcf3a}
-.res-line{display:flex;justify-content:space-between;padding:6px 10px;font-size:15px;border-bottom:1px solid rgba(255,255,255,.1)}
-.res-line b{color:#7dffc4}
-.res-level{margin:10px 0 0;padding:8px 10px;border-radius:10px;font-weight:800;font-size:14px}
-.res-level.ok{background:rgba(125,255,196,.18);color:#7dffc4}
-.res-level.no{background:rgba(255,255,255,.08);color:#cfe}
-.shop-item{display:flex;align-items:center;gap:12px;text-align:left;padding:10px;border-radius:12px;
- background:rgba(255,255,255,.07);margin-bottom:8px;border:1px solid rgba(255,255,255,.12)}
+#res-num{font:900 28px var(--mono);color:#ffcf3a}
+.res-line{display:flex;justify-content:space-between;padding:6px 10px;font:14px var(--mono);border-bottom:1px solid rgba(255,255,255,.1)}
+.res-line b{color:var(--ok)}
+.res-level{margin:10px 0 0;padding:8px 10px;font:800 13px var(--mono)}
+.res-level.ok{background:rgba(93,255,176,.14);color:var(--ok)}
+.res-level.no{background:rgba(255,255,255,.07);color:#cfe}
+.shop-item{display:flex;align-items:center;gap:12px;text-align:left;padding:10px;
+ background:rgba(255,255,255,.05);margin-bottom:8px;border:1px solid rgba(255,255,255,.12)}
 .shop-item .ic{font-size:28px;width:40px;text-align:center}
 .shop-item .info{flex:1;min-width:0}
-.shop-item .name{font-weight:800;font-size:15px}
+.shop-item .name{font:800 14px var(--mono)}
 .shop-item .desc{font-size:12px;opacity:.75;margin-top:2px}
-.shop-item.owned{border-color:#7dffc4;background:rgba(125,255,196,.1)}
-.buy{padding:10px 12px;border-radius:10px;border:1px solid #ffc27a;background:linear-gradient(180deg,#ff9a3a,#e0661a);
- color:#fff;font-weight:800;font-size:13px;white-space:nowrap}
-.buy.poor{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.25);color:#cde}
-.buy.got{background:rgba(125,255,196,.2);border-color:#7dffc4;color:#7dffc4;cursor:default}
-.buy:focus{outline:2px solid #8fefff}
-#res-toast{position:absolute;left:50%;top:10px;transform:translateX(-50%);padding:6px 14px;border-radius:999px;
- background:rgba(0,0,0,.8);font-weight:800;font-size:13px;opacity:0;transition:opacity .25s;pointer-events:none}
+.shop-item.owned{border-color:var(--ok);background:rgba(93,255,176,.09)}
+.buy{padding:10px 12px;border:1px solid var(--am);background:linear-gradient(180deg,#3b2a0f,#1d1407);
+ color:var(--am);font:800 12px var(--mono);letter-spacing:.06em;white-space:nowrap}
+.buy.poor{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.25);color:#cde}
+.buy.got{background:rgba(93,255,176,.15);border-color:var(--ok);color:var(--ok);cursor:default}
+.buy:focus{outline:2px solid var(--cy)}
+#res-toast{position:absolute;left:50%;top:10px;transform:translateX(-50%);padding:6px 14px;
+ background:rgba(0,0,0,.85);border:1px solid var(--am);font:800 13px var(--mono);opacity:0;transition:opacity .25s;pointer-events:none}
 #res-toast.show{opacity:1}
 #result .actions2{display:flex;gap:10px;margin-top:14px}
-#result .actions2 .btn{flex:1;padding:13px 10px;font-size:14px}
+#result .actions2 .btn{flex:1;padding:13px 10px 13px 28px;font-size:13px}
+#result .actions2 .btn::after{left:10px}
 
 @media (max-width:640px){
  .dpad{width:150px;height:150px}.vert .tbtn{width:70px;height:70px}.actions .tbtn{width:70px;height:56px}
  .actions{right:calc(96px + env(safe-area-inset-right,0px));max-width:150px}
  #hud-left{min-width:120px}#hud-left .depth{font-size:24px}
+ #mp-bar{top:calc(124px + env(safe-area-inset-top,0px));min-width:120px;font-size:12px}
+ .btn{font-size:14px;letter-spacing:.12em}
 }
 </style>
 </head>
@@ -188,6 +275,12 @@ button{font-family:inherit;cursor:pointer}
   <div id="hud-objective"></div>
 </div>
 
+<!-- Multiplayer-Leiste: DU: x € | Freund: y € -->
+<div id="mp-bar" class="hidden">
+  <span id="mp-me">DU: 0 €</span>
+  <span id="mp-friend">Mitspieler: 0 €</span>
+</div>
+
 <button id="btn-menu" type="button" style="display:none" data-i18n="menu">MENÜ</button>
 
 <!-- Touch-Buttons (iPad) -->
@@ -223,44 +316,96 @@ button{font-family:inherit;cursor:pointer}
     <h3 data-i18n="shopTitle">UPGRADE-SHOP</h3>
     <div id="shop-list"></div>
     <div class="actions2">
-      <button id="result-continue" class="btn primary" type="button" data-i18n="resContinue">NÄCHSTE TOUR</button>
-      <button id="result-menu" class="btn" type="button" data-i18n="resMenu">ZUM MENÜ</button>
+      <button id="result-continue" class="btn cut primary" type="button" data-i18n="resContinue">NÄCHSTE TOUR</button>
+      <button id="result-menu" class="btn cut" type="button" data-i18n="resMenu">ZUM MENÜ</button>
     </div>
   </div>
 </div>
 
 <!-- Hauptmenü -->
 <div id="menu">
-  <div class="box">
+  <div class="box cut">
     <h1>BEYOND MARIANA</h1>
     <p class="sub" data-i18n="subtitle">MARIANA TOURS</p>
+    <div class="ticks"></div>
 
+    <!-- Hauptmenü -->
     <div class="screen active" id="screen-main">
-      <button id="btn-resume" class="btn primary hidden" type="button" data-i18n="resume">WEITER</button>
-      <button class="btn" type="button" data-go="play" data-i18n="play">PLAY</button>
-      <button class="btn" type="button" data-go="settings" data-i18n="settings">SETTINGS</button>
+      <button id="btn-resume" class="btn cut primary hidden" type="button" data-i18n="resume">WEITER</button>
+      <button class="btn cut" type="button" data-go="play" data-i18n="play">PLAY</button>
+      <button class="btn cut" type="button" data-go="settings" data-i18n="settings">SETTINGS</button>
     </div>
 
+    <!-- PLAY -->
     <div class="screen" id="screen-play">
-      <button class="btn" type="button" data-go="levels" data-i18n="singleplayer">SINGLEPLAYER</button>
-      <button class="btn disabled" type="button" disabled><span data-i18n="multiplayer">MULTIPLAYER</span><small data-i18n="comingSoon">Coming Soon</small></button>
-      <button class="btn disabled" type="button" disabled><span data-i18n="story">STORY</span><small data-i18n="comingSoon">Coming Soon</small></button>
-      <button class="btn" type="button" data-back data-i18n="back">ZURÜCK</button>
+      <button class="btn cut" type="button" data-go="levels" data-i18n="singleplayer">SINGLEPLAYER</button>
+      <button class="btn cut" type="button" data-go="multiplayer" data-i18n="multiplayer">MULTIPLAYER</button>
+      <button class="btn cut disabled" type="button" disabled><span data-i18n="story">STORY</span><small data-i18n="comingSoon">Coming Soon</small></button>
+      <button class="btn cut" type="button" data-back data-i18n="back">ZURÜCK</button>
     </div>
 
+    <!-- Level-Auswahl (Singleplayer) -->
     <div class="screen" id="screen-levels">
       <h2 data-i18n="chooseLevel">LEVEL WÄHLEN</h2>
       <div id="level-list" style="display:flex;flex-direction:column;gap:10px"></div>
-      <button class="btn" type="button" data-back data-i18n="back">ZURÜCK</button>
+      <button class="btn cut" type="button" data-back data-i18n="back">ZURÜCK</button>
     </div>
 
+    <!-- MULTIPLAYER-Menü -->
+    <div class="screen" id="screen-multiplayer">
+      <h2 data-i18n="mpTitle">MULTIPLAYER</h2>
+      <div class="field">
+        <label class="lbl2" for="mp-name" data-i18n="mpName">Spielername</label>
+        <div class="inp cut">
+          <input id="mp-name" type="text" maxlength="14" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-i18n-ph="mpNamePh" placeholder="z. B. CaptainMax">
+        </div>
+      </div>
+      <button id="btn-mp-host" class="btn cut big primary" type="button">
+        <span data-i18n="mpHost">SPIEL ERSTELLEN</span>
+        <small data-i18n="mpHostSub">Du bist der Host – dein Freund tritt per Code bei</small>
+      </button>
+      <button id="btn-mp-join" class="btn cut big" type="button">
+        <span data-i18n="mpJoin">SPIEL BEITRETEN</span>
+        <small data-i18n="mpJoinSub">Code vom Host eingeben</small>
+      </button>
+      <button class="btn cut" type="button" data-back data-i18n="back">ZURÜCK</button>
+    </div>
+
+    <!-- MULTIPLAYER: Spiel erstellen (Host) -->
+    <div class="screen" id="screen-mphost">
+      <h2 data-i18n="mpHostTitle">SPIEL ERSTELLEN</h2>
+      <div class="lbl2" data-i18n="mpRoomCode">RAUM-CODE</div>
+      <div id="mp-code" class="lcd cut">····</div>
+      <div class="lbl2" data-i18n="mpChooseLevel">LEVEL FÜR BEIDE SPIELER</div>
+      <div class="seg-row">
+        <button class="seg cut on" type="button" data-mplevel="1">LEVEL 1</button>
+        <button class="seg cut" type="button" data-mplevel="2">LEVEL 2</button>
+      </div>
+      <div id="mp-level-hint"></div>
+      <div id="mp-host-status" class="mp-status"></div>
+      <button class="btn cut" type="button" data-back data-i18n="mpCancel">ABBRECHEN</button>
+    </div>
+
+    <!-- MULTIPLAYER: Spiel beitreten (Gast) -->
+    <div class="screen" id="screen-mpjoin">
+      <h2 data-i18n="mpJoinTitle">SPIEL BEITRETEN</h2>
+      <div class="lbl2" data-i18n="mpCodeLabel">4-stelliger Raum-Code</div>
+      <div class="inp code cut">
+        <input id="mp-join-code" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="0000">
+      </div>
+      <button id="btn-mp-go" class="btn cut big primary" type="button"><span class="go" data-i18n="mpGo">LOS!</span></button>
+      <div id="mp-join-status" class="mp-status"></div>
+      <button class="btn cut" type="button" data-back data-i18n="mpCancel">ABBRECHEN</button>
+    </div>
+
+    <!-- SETTINGS -->
     <div class="screen" id="screen-settings">
       <h2 data-i18n="settingsTitle">EINSTELLUNGEN</h2>
       <div class="setrow">
         <label><span data-i18n="language">Sprache</span></label>
-        <div class="row lang">
-          <button type="button" data-lang="de">DEUTSCH</button>
-          <button type="button" data-lang="en">ENGLISH</button>
+        <div class="seg-row">
+          <button class="seg cut" type="button" data-lang="de">DEUTSCH</button>
+          <button class="seg cut" type="button" data-lang="en">ENGLISH</button>
         </div>
       </div>
       <div class="setrow">
@@ -272,11 +417,15 @@ button{font-family:inherit;cursor:pointer}
       <p class="help" data-i18n="helpKb"></p>
       <p class="help" data-i18n="helpPad"></p>
       <p class="help" data-i18n="helpTouch"></p>
-      <button class="btn" type="button" data-back data-i18n="back">ZURÜCK</button>
+      <button class="btn cut" type="button" data-back data-i18n="back">ZURÜCK</button>
     </div>
   </div>
 </div>
 
-<!-- Three.js kommt über package.json / Vite: import * as THREE from 'three' (in script.js, sub.js, world.js) -->
+<!-- PeerJS (WebRTC) für den Multiplayer – setzt window.Peer.
+     Falls multiplayer.js PeerJS schon selbst nachlädt, kann diese Zeile entfallen. -->
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+
+<!-- Three.js kommt über package.json / Vite: import * as THREE from 'three' (in script.js, sub.js, world.js, level2.js) -->
 <script type="module" src="./script.js"></script>
 </body></html>
