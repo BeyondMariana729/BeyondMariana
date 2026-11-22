@@ -7,12 +7,17 @@
    2-Spieler-Multiplayer (multiplayer.js, PeerJS/WebRTC).
 
    Levels:
-     Level 1 "Arctic Trench" -> world.js  (buildLevel1, unverändert)
-     Level 2 "Coral Reef"    -> level2.js (buildLevel2)
+     Level 1 "Arctic Trench"   -> world.js  (buildLevel1, unverändert)
+     Level 2 "Coral Reef"      -> level2.js (buildLevel2)
+     Level 3 "Mariana Trench"  -> level3.js (buildLevel3, 11.000 m Tiefsee-Graben)
    Level 2 wird freigeschaltet, sobald eine Tour in Level 1 abgerechnet wurde:
      localStorage 'beyondMariana_level2Unlocked' = 'true'  (bleibt dauerhaft)
+   Level 3 wird freigeschaltet, sobald eine Tour in Level 2 abgerechnet wurde:
+     localStorage 'beyondMariana_level3Unlocked' = 'true'  (bleibt dauerhaft)
    Beim Levelwechsel werden Touristen, U-Boot, Level UND die komplette
    Szene (Geometrien, Materialien, Texturen) entsorgt.
+   Level 3 liefert WORLD3.depthScale: die Tiefen-Anzeige (HUD + U-Boot-Display)
+   wird damit auf bis zu ~11.000 m hochgerechnet (Physik/Sauerstoff bleiben echt).
 
    Multiplayer:
      Host erstellt einen Raum (4-stelliger Code), Gast tritt bei, beide starten
@@ -20,7 +25,7 @@
      Jeder sieht das U-Boot des anderen (interpoliert) mit Namensschild und
      einen Live-Geldvergleich im HUD. Singleplayer bleibt unverändert.
 
-   Passt zu: index.html, ui.js, world.js, level2.js, sub.js, tourists.js, multiplayer.js
+   Passt zu: index.html, ui.js, world.js, level2.js, level3.js, sub.js, tourists.js, multiplayer.js
    Steuerung (Tastatur):
      W/S  vor/zurück (im U-Boot: Gas) · A/D lenken (beim Laufen: seitwärts)
      Leertaste hoch · Shift runter (beim Laufen: Shift = rennen)
@@ -38,6 +43,7 @@ import * as THREE from 'three';
 import { createSub, SUB } from './sub.js';
 import { buildLevel1, WORLD } from './world.js';
 import { buildLevel2, WORLD2 } from './level2.js';
+import { buildLevel3, WORLD3 } from './level3.js';
 import { createTourists } from './tourists.js';
 import { createMultiplayer } from './multiplayer.js';
 import * as UI from './ui.js';
@@ -52,6 +58,7 @@ const deadzone = (v, dz) => {
   const a = Math.abs(v);
   return a < dz ? 0 : Math.sign(v) * (a - dz) / (1 - dz);
 };
+const normLevel = (n) => { n = Number(n); return n === 3 ? 3 : (n === 2 ? 2 : 1); };
 
 /* Kleiner, schneller Zufallsgenerator mit Seed (für den gemeinsamen Level-Aufbau) */
 function mulberry32(seed) {
@@ -125,8 +132,11 @@ const SHOCK_TIME = 1.8;          // Quallen-Schock (Sekunden)
 const MP_SEND_INTERVAL = 1 / 15; // Multiplayer: 15 Zustands-Pakete pro Sekunde
 const MP_SPAWN_OFFSET = 8;       // Gast startet 8 m neben dem Host
 
-/* Level-2-Sehenswürdigkeiten -> Reaktionen, die tourists.js schon kennt */
-const TOUR_KIND = { arch: 'cathedral', treasure: 'wreck', shark: 'whale' };
+/* Level-2/3-Sehenswürdigkeiten -> Reaktionen, die tourists.js schon kennt */
+const TOUR_KIND = {
+  arch: 'cathedral', treasure: 'wreck', shark: 'whale',        // Level 2
+  lava: 'cathedral', subwreck: 'wreck', monster: 'whale'       // Level 3
+};
 
 /* Standard-Symbole/-Namen (Level 1) */
 const DEFAULT_SIGHT_META = {
@@ -153,18 +163,32 @@ function saveGame() {
 }
 
 /* ------------------------------------------------------------
-   Level-2-Freischaltung (dauerhaft in localStorage)
+   Level-2/3-Freischaltung (dauerhaft in localStorage)
    ------------------------------------------------------------ */
 const LEVEL2_KEY = 'beyondMariana_level2Unlocked';
+const LEVEL3_KEY = 'beyondMariana_level3Unlocked';
 let level2Unlocked = false;
-try { level2Unlocked = localStorage.getItem(LEVEL2_KEY) === 'true'; } catch (e) { /* ignorieren */ }
+let level3Unlocked = false;
+try {
+  level2Unlocked = localStorage.getItem(LEVEL2_KEY) === 'true';
+  level3Unlocked = localStorage.getItem(LEVEL3_KEY) === 'true';
+} catch (e) { /* ignorieren */ }
 if (UI.isLevel2Unlocked()) level2Unlocked = true;   // z. B. alter Spielstand aus ui.js
+if (UI.isLevel3Unlocked()) level3Unlocked = true;
 
 function unlockLevel2() {
   if (level2Unlocked) return false;
   level2Unlocked = true;
   try { localStorage.setItem(LEVEL2_KEY, 'true'); } catch (e) { /* ignorieren */ }
   UI.setLevel2Unlocked(true);
+  return true;
+}
+
+function unlockLevel3() {
+  if (level3Unlocked) return false;
+  level3Unlocked = true;
+  try { localStorage.setItem(LEVEL3_KEY, 'true'); } catch (e) { /* ignorieren */ }
+  UI.setLevel3Unlocked(true);
   return true;
 }
 
@@ -262,7 +286,7 @@ let sub = null;
 let tourists = null;
 let running = false;
 
-let currentLevelId = 1;      // 1 = Arctic Trench (world.js), 2 = Coral Reef (level2.js)
+let currentLevelId = 1;      // 1 = Arctic Trench (world.js), 2 = Coral Reef (level2.js), 3 = Mariana Trench (level3.js)
 let worldCfg = WORLD;
 let sightMeta = DEFAULT_SIGHT_META;
 let shockT = 0;              // Quallen-Schock
@@ -356,6 +380,7 @@ const mp = createMultiplayer({
     UI.setMpStatus('host', 'mpJoined', { name }, 'ok');
     let levelId = UI.getMpLevel();
     if (levelId === 2 && !level2Unlocked) levelId = 1;
+    if (levelId === 3 && !level3Unlocked) levelId = level2Unlocked ? 2 : 1;
     const seed = ((Math.random() * 4294967295) >>> 0) || 1;
     mp.sendStart(levelId, seed);
     startMultiplayerGame(levelId, seed);
@@ -380,7 +405,7 @@ const mp = createMultiplayer({
 
 function startMultiplayerGame(levelId, seed) {
   mpSeed = (Number(seed) >>> 0) || 1;
-  currentLevelId = (Number(levelId) === 2) ? 2 : 1;
+  currentLevelId = normLevel(levelId);
   UI.enterGame();
   UI.setMpBarActive(true, mp.remoteName);
   mpSendT = 0;
@@ -806,7 +831,10 @@ function buildGame() {
   const realRandom = Math.random;
   if (mp.connected && mpSeed !== null) Math.random = mulberry32(mpSeed);
   try {
-    if (currentLevelId === 2) {
+    if (currentLevelId === 3) {
+      level = buildLevel3(scene, renderer);
+      worldCfg = WORLD3;
+    } else if (currentLevelId === 2) {
       level = buildLevel2(scene, renderer);
       worldCfg = WORLD2;
     } else {
@@ -820,7 +848,7 @@ function buildGame() {
   camera.far = worldCfg.cameraFar;
   camera.updateProjectionMatrix();
   sightMeta = level.meta || DEFAULT_SIGHT_META;
-  UI.setSightIcons(sightMeta.icons);          // HUD-Symbole: Level 1 oder Level 2
+  UI.setSightIcons(sightMeta.icons);          // HUD-Symbole: Level 1, 2 oder 3
 
   level.setViewDistance(UI.settings.view);
   sub = createSub();
@@ -888,8 +916,10 @@ function settleTour() {
   addMoney(fare);
 
   // Level 1 abgeschlossen -> Level 2 dauerhaft freischalten
-  let newUnlock = false;
-  if (currentLevelId === 1) newUnlock = unlockLevel2();
+  // Level 2 abgeschlossen -> Level 3 dauerhaft freischalten
+  let newUnlock = 0;
+  if (currentLevelId === 1) { if (unlockLevel2()) newUnlock = 2; }
+  else if (currentLevelId === 2) { if (unlockLevel3()) newUnlock = 3; }
 
   sub.setLight(false);
   sub.setParty(false);
@@ -1080,6 +1110,9 @@ function handleEvents() {
         UI.showMessage('msgJelly', null, 2800);
         break;
       case 'shark-found': UI.showMessage('msgSharkFound', null, 5000); break;
+      case 'lava-found': UI.showMessage('msgLavaFound', null, 5000); break;           // Level 3
+      case 'wreck-found': UI.showMessage('msgSubFound', null, 5000); break;           // Level 3
+      case 'monster-found': UI.showMessage('msgMonsterFound', null, 5500); break;     // Level 3
       case 'stalker-dazzled': UI.showMessage('msgStalkerScared'); break;
       case 'stalker-dark': UI.showMessage('msgStalkerDark', null, 5000); break;
       case 'whale-found': UI.showMessage('msgWhaleFound', null, 5000); break;
@@ -1282,11 +1315,12 @@ function simulate(dt) {
 
   /* ---- Anzeigen ---- */
   const depth = Math.max(0, -g.position.y);
+  const depthShown = depth * (worldCfg.depthScale || 1);   // Level 3: bis ~11.000 m
   const heading = ((-yaw * 180 / Math.PI) % 360 + 360) % 360;
   const sightsDone = level.sights.map((s) => s.visited);
   level.getPings(g.position, yaw, pingsOut);
   sub.updateDisplays({
-    depth, o2, speed: vel.length(), heading,
+    depth: depthShown, o2, speed: vel.length(), heading,
     sightsDone, pings: pingsOut,
     money, rating: tourists ? tourists.averageRating() : lastRating,
     lang: UI.settings.lang,
@@ -1295,7 +1329,7 @@ function simulate(dt) {
   });
 
   const obj = currentObjective();
-  UI.updateHUD({ depth, o2, sights: sightsDone, objective: obj.key, objVars: obj.vars });
+  UI.updateHUD({ depth: depthShown, o2, sights: sightsDone, objective: obj.key, objVars: obj.vars });
 }
 
 /* ------------------------------------------------------------
@@ -1332,14 +1366,15 @@ bindTouchButtons();
 if (btnMenu) btnMenu.style.display = 'none';
 
 UI.initUI({
-  // Level-Auswahl (Singleplayer): 1 = world.js, 2 = level2.js (nur wenn freigeschaltet)
+  // Level-Auswahl (Singleplayer): 1 = world.js, 2 = level2.js, 3 = level3.js (2/3 nur wenn freigeschaltet)
   onStartLevel: (id) => {
     if (id === 2 && !level2Unlocked) return;
+    if (id === 3 && !level3Unlocked) return;
     // Singleplayer: eine evtl. offene Multiplayer-Verbindung sauber beenden
     mp.close();
     mpSeed = null;
     UI.setMpBarActive(false);
-    currentLevelId = (id === 2) ? 2 : 1;
+    currentLevelId = normLevel(id);
     startLevel();
   },
   onResume: () => {
@@ -1359,7 +1394,7 @@ UI.initUI({
     disposeLevel();
     UI.setHUDVisible(false);
     UI.setTouchVisible(false);
-    if (btnMenu) btnMenu.style.display = 'none';
+         if (btnMenu) btnMenu.style.display = 'none';
     UI.showMenu({ inGame: false });
   },
   onBuyUpgrade: (id) => buyUpgrade(id),
@@ -1395,8 +1430,9 @@ UI.initUI({
   }
 });
 
-// gespeicherten Stand an die Level-Auswahl geben: Level 2 bleibt nach dem Neuladen freigeschaltet
+// gespeicherten Stand an die Level-Auswahl geben: Level 2 und 3 bleiben nach dem Neuladen freigeschaltet
 UI.setLevel2Unlocked(level2Unlocked);
+UI.setLevel3Unlocked(level3Unlocked);
 
 requestAnimationFrame(frame);
 focusCanvas();
@@ -1405,6 +1441,7 @@ focusCanvas();
 //   BEYOND.visitAll()                   → alle 3 Sehenswürdigkeiten sofort abhaken
 //   BEYOND.addMoney(500)                → Geld für den Shop
 //   BEYOND.unlockLevel2()               → Level 2 sofort freischalten (wird gespeichert)
+//   BEYOND.unlockLevel3()               → Level 3 sofort freischalten (wird gespeichert)
 //   BEYOND.tourists.buyPills()          → Rausch auslösen
 //   BEYOND.tourists.tourists[0].startTrip() → ein Tourist geht sofort aufs Klo
 //   BEYOND.resetSave()                  → Geld + Upgrades löschen
@@ -1416,10 +1453,12 @@ window.BEYOND = {
   get onToilet() { return onToilet; },
   get levelId() { return currentLevelId; },
   get level2Unlocked() { return level2Unlocked; },
+  get level3Unlocked() { return level3Unlocked; },
   get mp() { return mp; },
   visitAll() { if (level) level.visitAll(); },
   addMoney(n) { addMoney(n || 100); },
   unlockLevel2() { return unlockLevel2(); },
+  unlockLevel3() { return unlockLevel3(); },
   resetSave() {
     money = 0; owned.golden = owned.fog = owned.flood = false; saveGame(); applyUpgrades();
     UI.updateMoney(0, 0);
