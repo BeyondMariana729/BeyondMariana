@@ -1,7 +1,8 @@
 /* ============================================================
    BEYOND MARIANA – ui.js  (MARIANA TOURS)
    Menüs (PLAY / SETTINGS / Level-Auswahl: Level 1 Arctic Trench,
-   Level 2 Coral Reef – freigeschaltet nach der ersten Level-1-Tour),
+   Level 2 Coral Reef – freigeschaltet nach der ersten Level-1-Tour,
+   Level 3 Mariana Trench – freigeschaltet nach der ersten Level-2-Tour),
    Sprachen (DE/EN), Einstellungen (Sichtweite), HUD-Helfer
    (inkl. setSightIcons), Meldungen, Gamepad-Menüsteuerung,
    permanente Leiste oben: Live-Sterne + Geld (€),
@@ -15,16 +16,19 @@
    Speicher:
      'beyond-mariana-settings-v1'        -> Sprache, Sichtweite
      'beyondMariana_level2Unlocked'      -> 'true' sobald Level 2 frei ist
+     'beyondMariana_level3Unlocked'      -> 'true' sobald Level 3 frei ist
      'beyond-mariana-mp-name'            -> Multiplayer-Spielername
    ============================================================ */
 
 const STORAGE_KEY = 'beyond-mariana-settings-v1';
 const MP_NAME_KEY = 'beyond-mariana-mp-name';
 export const LEVEL2_KEY = 'beyondMariana_level2Unlocked';
+export const LEVEL3_KEY = 'beyondMariana_level3Unlocked';
 
 /* ---------- Einstellungen ---------- */
 export const settings = { lang: 'de', view: 1 };
 let level2Unlocked = false;
+let level3Unlocked = false;
 
 try {
   const raw = localStorage.getItem(STORAGE_KEY);
@@ -40,6 +44,7 @@ try {
 
 try {
   if (localStorage.getItem(LEVEL2_KEY) === 'true') level2Unlocked = true;
+  if (localStorage.getItem(LEVEL3_KEY) === 'true') level3Unlocked = true;
 } catch (e) { /* ignorieren */ }
 
 function saveSettings() {
@@ -96,9 +101,13 @@ export const I18N = {
     lvl2Name: 'Coral Reef',
     lvl2Desc: 'Bunte Korallen, Felsbogen, Piraten-Schatz, Riffhai – und Quallen, die zwicken!',
     lvl2LockedDesc: 'Gesperrt – schließe zuerst eine Tour in Level 1 ab',
+    lvl3Name: 'Mariana Trench',
+    lvl3Desc: '11.000 m tief: glühende Lava-Felder, Black Smokers, ein Forschungs-U-Boot – und ein Monster!',
+    lvl3LockedDesc: 'Gesperrt – schließe zuerst eine Tour in Level 2 ab',
     lvlLockedDesc: 'Noch nicht verfügbar',
     lockedToast: 'Dieses Level ist noch gesperrt.',
     lvl2LockedToast: 'Level 2 ist gesperrt – beende zuerst eine Tour in Level 1!',
+    lvl3LockedToast: 'Level 3 ist gesperrt – beende zuerst eine Tour in Level 2!',
     modeExt: 'AUSSEN-KAMERA',
     modeCockpit: 'COCKPIT-KAMERA',
     modeWalk: 'IM U-BOOT',
@@ -122,6 +131,14 @@ export const I18N = {
     msgJelly: 'Zzzzap! Eine Qualle hat das U-Boot geschockt!',
     msgTreasureBonus: 'Piratenschatz geborgen: +{eur} € Bonus!',
     msgLevel2Unlocked: 'Level 2 „Coral Reef“ freigeschaltet!',
+    // Meldungen Level 3
+    msgSight_lava: 'Sehenswürdigkeit {n}/3: das glühende Lava-Feld mit den Riesen-Schloten!',
+    msgSight_subwreck: 'Sehenswürdigkeit {n}/3: das versunkene Forschungs-U-Boot!',
+    msgSight_monster: 'Sehenswürdigkeit {n}/3: das Tiefsee-Monster! Bitte nicht füttern …',
+    msgLavaFound: 'Voraus glüht der Grund: ein gewaltiges Lava-Feld mit turmhohen Black Smokers!',
+    msgSubFound: 'Zwei Scheinwerfer in einer Felsspalte … ein gesunkenes Forschungs-U-Boot!',
+    msgMonsterFound: 'Was ist DAS?! Ein riesiger Anglerfisch mit leuchtender Lock-Angel – fahr näher ran!',
+    msgLevel3Unlocked: 'Level 3 „Mariana Trench“ freigeschaltet!',
     // allgemein
     msgO2Low: 'Sauerstoff wird knapp – zurück zur Plattform!',
     msgO2Charged: 'Sauerstoff aufgeladen',
@@ -141,6 +158,7 @@ export const I18N = {
     resEarned: 'Verdient',
     resWallet: 'Kasse',
     resLevelNew: '🔓 Level 2 freigeschaltet: Coral Reef!',
+    resLevelNew3: '🔓 Level 3 freigeschaltet: Mariana Trench!',
     resLevelOk: '🏆 Top-Tour! Die Touristen sind begeistert.',
     resLevelNo: 'Ab 3.5 ★ gilt eine Tour als Top-Tour – diesmal leider nicht.',
     shopTitle: 'UPGRADE-SHOP',
@@ -170,6 +188,7 @@ export const I18N = {
     mpWaiting: 'Warte auf Mitspieler …',
     mpChooseLevel: 'LEVEL FÜR BEIDE SPIELER',
     mpL2Locked: 'Level 2 ist noch gesperrt – schließe zuerst eine Tour in Level 1 ab.',
+    mpL3Locked: 'Level 3 ist noch gesperrt – schließe zuerst eine Tour in Level 2 ab.',
     mpCancel: 'ABBRECHEN',
     mpGo: 'LOS!',
     mpConnecting: 'Verbinde …',
@@ -224,9 +243,13 @@ export const I18N = {
     lvl2Name: 'Coral Reef',
     lvl2Desc: 'Colorful corals, rock arch, pirate treasure, reef shark – and jellyfish that sting!',
     lvl2LockedDesc: 'Locked – finish a tour in Level 1 first',
+    lvl3Name: 'Mariana Trench',
+    lvl3Desc: '11,000 m deep: glowing lava fields, black smokers, a research sub – and a monster!',
+    lvl3LockedDesc: 'Locked – finish a tour in Level 2 first',
     lvlLockedDesc: 'Not available yet',
     lockedToast: 'This level is still locked.',
     lvl2LockedToast: 'Level 2 is locked – finish a tour in Level 1 first!',
+    lvl3LockedToast: 'Level 3 is locked – finish a tour in Level 2 first!',
     modeExt: 'EXTERIOR CAMERA',
     modeCockpit: 'COCKPIT CAMERA',
     modeWalk: 'INSIDE THE SUB',
@@ -247,6 +270,13 @@ export const I18N = {
     msgJelly: 'Zzzzap! A jellyfish just shocked the sub!',
     msgTreasureBonus: 'Pirate treasure recovered: +€{eur} bonus!',
     msgLevel2Unlocked: 'Level 2 "Coral Reef" unlocked!',
+    msgSight_lava: 'Sight {n}/3: the glowing lava field with the giant vents!',
+    msgSight_subwreck: 'Sight {n}/3: the sunken research submarine!',
+    msgSight_monster: 'Sight {n}/3: the deep-sea monster! Please do not feed …',
+    msgLavaFound: 'The seabed glows ahead: a huge lava field with tower-high black smokers!',
+    msgSubFound: 'Two headlights in a rock crevice … a sunken research submarine!',
+    msgMonsterFound: 'What is THAT?! A giant anglerfish with a glowing lure – get closer!',
+    msgLevel3Unlocked: 'Level 3 "Mariana Trench" unlocked!',
     msgO2Low: 'Oxygen is running low – return to the platform!',
     msgO2Charged: 'Oxygen recharged',
     msgOxygenOut: 'Emergency ascent! The sub was pulled back to the platform.',
@@ -264,6 +294,7 @@ export const I18N = {
     resEarned: 'Earned',
     resWallet: 'Cash',
     resLevelNew: '🔓 Level 2 unlocked: Coral Reef!',
+    resLevelNew3: '🔓 Level 3 unlocked: Mariana Trench!',
     resLevelOk: '🏆 Top tour! The tourists are thrilled.',
     resLevelNo: 'A tour counts as a top tour from 3.5 ★ – not this time.',
     shopTitle: 'UPGRADE SHOP',
@@ -293,6 +324,7 @@ export const I18N = {
     mpWaiting: 'Waiting for a second player …',
     mpChooseLevel: 'LEVEL FOR BOTH PLAYERS',
     mpL2Locked: 'Level 2 is still locked – finish a tour in Level 1 first.',
+    mpL3Locked: 'Level 3 is still locked – finish a tour in Level 2 first.',
     mpCancel: 'CANCEL',
     mpGo: 'GO!',
     mpConnecting: 'Connecting …',
@@ -308,11 +340,13 @@ export const I18N = {
   }
 };
 
-/* Level 1 immer spielbar · Level 2 nach der ersten Level-1-Tour · 3–5 folgen */
+/* Level 1 immer spielbar · Level 2 nach der ersten Level-1-Tour ·
+   Level 3 nach der ersten Level-2-Tour · 4–5 folgen
+   unlock = Nummer des Levels, dessen Freischaltung nötig ist (2 oder 3) */
 export const LEVELS = [
   { id: 1, nameKey: 'lvl1Name', descKey: 'lvl1Desc', playable: true },
-  { id: 2, nameKey: 'lvl2Name', descKey: 'lvl2Desc', lockedDescKey: 'lvl2LockedDesc', playable: true, requiresUnlock: true },
-  { id: 3, nameKey: null, descKey: 'lvlLockedDesc', playable: false },
+  { id: 2, nameKey: 'lvl2Name', descKey: 'lvl2Desc', lockedDescKey: 'lvl2LockedDesc', lockedToastKey: 'lvl2LockedToast', playable: true, unlock: 2 },
+  { id: 3, nameKey: 'lvl3Name', descKey: 'lvl3Desc', lockedDescKey: 'lvl3LockedDesc', lockedToastKey: 'lvl3LockedToast', playable: true, unlock: 3 },
   { id: 4, nameKey: null, descKey: 'lvlLockedDesc', playable: false },
   { id: 5, nameKey: null, descKey: 'lvlLockedDesc', playable: false }
 ];
@@ -351,8 +385,9 @@ export function isTouchDevice() {
   return ('ontouchstart' in window) || (navigator.maxTouchPoints || 0) > 0;
 }
 
-/* ---------- Level-2-Freischaltung ---------- */
+/* ---------- Level-Freischaltung ---------- */
 export function isLevel2Unlocked() { return level2Unlocked; }
+export function isLevel3Unlocked() { return level3Unlocked; }
 
 /* v = true: freischalten und dauerhaft speichern; v = false: nur Anzeige (löscht nichts) */
 export function setLevel2Unlocked(v) {
@@ -363,8 +398,22 @@ export function setLevel2Unlocked(v) {
   renderLevels();
 }
 
+export function setLevel3Unlocked(v) {
+  level3Unlocked = !!v;
+  if (level3Unlocked) {
+    try { localStorage.setItem(LEVEL3_KEY, 'true'); } catch (e) { /* ignorieren */ }
+  }
+  renderLevels();
+}
+
+function levelUnlocked(id) {
+  if (id === 2) return level2Unlocked;
+  if (id === 3) return level3Unlocked;
+  return true;
+}
+
 function levelOpen(lv) {
-  return !!lv.playable && (!lv.requiresUnlock || level2Unlocked);
+  return !!lv.playable && (!lv.unlock || levelUnlocked(lv.unlock));
 }
 
 /* ---------- Leiste oben: Live-Sterne + Geld ---------- */
@@ -510,19 +559,21 @@ export function getMpName() {
 
 /* ---------- Multiplayer: Level-Wahl des Hosts ---------- */
 export function getMpLevel() {
-  return (mpLevel === 2 && !level2Unlocked) ? 1 : mpLevel;
+  let id = mpLevel;
+  while (id > 1 && !levelUnlocked(id)) id--;
+  return id;
 }
 
 function renderMpLevels() {
   $$('[data-mplevel]').forEach((b) => {
     const id = Number(b.getAttribute('data-mplevel'));
-    const locked = id === 2 && !level2Unlocked;
+    const locked = !levelUnlocked(id);
     b.classList.toggle('on', getMpLevel() === id);
     b.textContent = (locked ? '🔒 ' : '') + t('level').toUpperCase() + ' ' + id;
     b.style.opacity = locked ? '.5' : '1';
   });
   const hint = $('mp-level-hint');
-  if (hint) hint.textContent = t(getMpLevel() === 2 ? 'lvl2Name' : 'lvl1Name');
+  if (hint) hint.textContent = t('lvl' + getMpLevel() + 'Name');
 }
 
 /* ---------- Multiplayer: Status-Anzeigen ---------- */
@@ -629,7 +680,7 @@ function renderLevels() {
     btn.appendChild(state);
     btn.addEventListener('click', () => {
       if (!levelOpen(lv)) {
-        toast(lv.requiresUnlock ? t('lvl2LockedToast') : t('lockedToast'));
+        toast(lv.lockedToastKey ? t(lv.lockedToastKey) : t('lockedToast'));
         btn.animate(
           [{ transform: 'translateX(0)' }, { transform: 'translateX(-7px)' }, { transform: 'translateX(7px)' }, { transform: 'translateX(0)' }],
           { duration: 260 }
@@ -706,7 +757,8 @@ export function setHUDVisible(v) {
 
 export function setTouchVisible(v) { $('touch').classList.toggle('hidden', !v); }
 
-/* Symbole der 3 Sehenswürdigkeiten im HUD (Level 1: ['🚢','💎','🐋'] · Level 2: ['🌉','💰','🦈']) */
+/* Symbole der 3 Sehenswürdigkeiten im HUD
+   (Level 1: ['🚢','💎','🐋'] · Level 2: ['🌉','💰','🦈'] · Level 3: ['🌋','🔬','👹']) */
 export function setSightIcons(icons) {
   if (!icons) return;
   const nodes = (el && el.sights) ? el.sights : [$('sight-0'), $('sight-1'), $('sight-2')];
@@ -790,7 +842,7 @@ export function updateHUD(s) {
 }
 
 /* ---------- Tour-Abrechnung mit Shop ---------- */
-/* state: { rating, earned, money, owned: {golden, fog, flood}, newUnlock } */
+/* state: { rating, earned, money, owned: {golden, fog, flood}, newUnlock (0 | 2 | 3) } */
 function renderResult(s) {
   const r = Math.min(5, Math.max(1, Number(s.rating) || 1));
   $('res-stars').style.setProperty('--p', (r / 5 * 100) + '%');
@@ -800,7 +852,7 @@ function renderResult(s) {
   const lv = $('res-level');
   const ok = r >= 3.5;
   if (s.newUnlock) {
-    lv.textContent = t('resLevelNew');
+    lv.textContent = t(s.newUnlock === 3 ? 'resLevelNew3' : 'resLevelNew');
     lv.className = 'res-level ok';
   } else {
     lv.textContent = ok ? t('resLevelOk') : t('resLevelNo');
@@ -979,9 +1031,9 @@ export function initUI(callbacks) {
     const mpl = e.target.closest('[data-mplevel]');
     if (mpl) {
       const id = Number(mpl.getAttribute('data-mplevel'));
-      if (id === 2 && !level2Unlocked) {
+      if (!levelUnlocked(id)) {
         const hint = $('mp-level-hint');
-        if (hint) hint.textContent = t('mpL2Locked');
+        if (hint) hint.textContent = t(id === 3 ? 'mpL3Locked' : 'mpL2Locked');
         clearTimeout(mpHintTimer);
         mpHintTimer = setTimeout(renderMpLevels, 2600);
         mpl.animate(
