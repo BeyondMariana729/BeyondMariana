@@ -19,19 +19,30 @@
    Level 3 liefert WORLD3.depthScale: die Tiefen-Anzeige (HUD + U-Boot-Display)
    wird damit auf bis zu ~11.000 m hochgerechnet (Physik/Sauerstoff bleiben echt).
 
+   NEU (CrazyGames-Release):
+     - 5 Sprachen (EN/DE/FR/NL/PL); sub.js / tourists.js / shop.js bekommen
+       weiterhin nur 'de' oder 'en' (alle anderen Sprachen -> 'en')
+     - Bord-Bar-Limit: jeder Passagier nur 1x bedient (max. 6 Verkäufe pro Tour),
+       danach SOLD OUT; Preis 25–50 € + Sterne-Bonus
+     - Riesenfisch-/Anglerfisch-Bounce in Level 2 und 3 (sanfter Rückstoß,
+       kurzes weiches Kamera-Rütteln, Warn-Popup)
+     - Steuerung: WASD / ZQSD / Pfeiltasten steuern, Maus ziehen = umschauen,
+       Enter = Aktion (E im Laufmodus), 5-Sekunden-Steuerungs-Overlay
+     - kein hartes Flackern: Kamera-Wackeln weich (Sinus statt Zufall)
+
    Multiplayer:
      Host erstellt einen Raum (4-stelliger Code), Gast tritt bei, beide starten
      gleichzeitig dasselbe Level (gleicher Zufalls-Seed beim Level-Aufbau).
      Jeder sieht das U-Boot des anderen (interpoliert) mit Namensschild und
      einen Live-Geldvergleich im HUD. Singleplayer bleibt unverändert.
 
-   Passt zu: index.html, ui.js, world.js, level2.js, level3.js, sub.js, tourists.js, multiplayer.js
+   Passt zu: index.html, ui.js, world.js, level2.js, level3.js, sub.js, tourists.js, multiplayer.js, shop.js
    Steuerung (Tastatur):
-     W/S  vor/zurück (im U-Boot: Gas) · A/D lenken (beim Laufen: seitwärts)
-     Leertaste hoch · Shift runter (beim Laufen: Shift = rennen)
-     Pfeiltasten oder Maus/Finger ziehen = umschauen
+     W/Z/↑ vor · S/↓ zurück (im U-Boot: Gas) · A/Q/← links · D/→ rechts
+     (beim Laufen: seitwärts) · Leertaste hoch · Shift runter (beim Laufen: Shift = rennen)
+     Maus/Finger ziehen = umschauen
      F Licht · G Greifarm · C Kamera wechseln
-     E aufstehen/hinsetzen (an Bar/WC: Aktion) · Q oder Enter = Aktion
+     E aufstehen/hinsetzen (an Bar/WC: Aktion) · Enter = Aktion
      Esc oder P = Menü
    Gamepad:
      Linker Stick bewegen/lenken · Rechter Stick umschauen
@@ -61,6 +72,9 @@ const deadzone = (v, dz) => {
 };
 const normLevel = (n) => { n = Number(n); return n === 3 ? 3 : (n === 2 ? 2 : 1); };
 
+/* sub.js / tourists.js / shop.js kennen nur 'de' und 'en' -> alles andere = 'en' */
+const toDispLang = (l) => ((l || UI.settings.lang) === 'de' ? 'de' : 'en');
+
 /* Kleiner, schneller Zufallsgenerator mit Seed (für den gemeinsamen Level-Aufbau) */
 function mulberry32(seed) {
   let a = seed >>> 0;
@@ -74,9 +88,22 @@ function mulberry32(seed) {
 }
 
 /* ------------------------------------------------------------
-   Zusätzliche Texte (zweisprachig), die ui.js nicht enthält
+   Zusätzliche Texte (5 Sprachen), die ui.js nicht enthält
+   Fallback: aktuelle Sprache -> Englisch
    ------------------------------------------------------------ */
 const TX = {
+  en: {
+    loading: 'Loading world …',
+    armOut: 'Grabber arm extended',
+    armIn: 'Grabber arm retracted',
+    hintFlush: 'Onboard toilet: E / ACTION sits you down',
+    hintFlushSeated: 'On the loo: E / ACTION flushes · move or STAND UP to get up',
+    wcSit: 'You are sitting on the onboard toilet. E / ACTION flushes, moving stands you up.',
+    wcOccupied: 'Occupied! A tourist is sitting on the onboard toilet.',
+    flush: 'Flush! The rubber duck is dancing …',
+    loadError: 'Loading error: ',
+    tourError: 'Tourist error: '
+  },
   de: {
     loading: 'Welt wird geladen …',
     armOut: 'Greifarm ausgefahren',
@@ -89,20 +116,44 @@ const TX = {
     loadError: 'Fehler beim Laden: ',
     tourError: 'Touristen-Fehler: '
   },
-  en: {
-    loading: 'Loading world …',
-    armOut: 'Grabber arm extended',
-    armIn: 'Grabber arm retracted',
-    hintFlush: 'Onboard toilet: E / ACTION sits you down',
-    hintFlushSeated: 'On the loo: E / ACTION flushes · move or STAND UP to get up',
-    wcSit: 'You are sitting on the onboard toilet. E / ACTION flushes, moving stands you up.',
-    wcOccupied: 'Occupied! A tourist is sitting on the onboard toilet.',
-    flush: 'Flush! The rubber duck is dancing …',
-    loadError: 'Loading error: ',
-    tourError: 'Tourist error: '
+  fr: {
+    loading: 'Chargement du monde …',
+    armOut: 'Bras de préhension sorti',
+    armIn: 'Bras de préhension rentré',
+    hintFlush: 'Toilettes de bord : E / ACTION pour s’asseoir',
+    hintFlushSeated: 'Sur les toilettes : E / ACTION tire la chasse · bougez ou SE LEVER pour se lever',
+    wcSit: 'Vous êtes assis sur les toilettes de bord. E / ACTION tire la chasse, bouger vous relève.',
+    wcOccupied: 'Occupé ! Un touriste est assis sur les toilettes de bord.',
+    flush: 'Chasse d’eau ! Le canard en plastique danse …',
+    loadError: 'Erreur de chargement : ',
+    tourError: 'Erreur touriste : '
+  },
+  nl: {
+    loading: 'Wereld laden …',
+    armOut: 'Grijparm uitgeschoven',
+    armIn: 'Grijparm ingetrokken',
+    hintFlush: 'Boordtoilet: E / ACTIE om te gaan zitten',
+    hintFlushSeated: 'Op de wc: E / ACTIE trekt door · beweeg of OPSTAAN om op te staan',
+    wcSit: 'Je zit op het boordtoilet. E / ACTIE trekt door, bewegen laat je opstaan.',
+    wcOccupied: 'Bezet! Er zit een toerist op het boordtoilet.',
+    flush: 'Doortrekken! Het badeendje danst …',
+    loadError: 'Laadfout: ',
+    tourError: 'Toeristenfout: '
+  },
+  pl: {
+    loading: 'Ładowanie świata …',
+    armOut: 'Chwytak wysunięty',
+    armIn: 'Chwytak schowany',
+    hintFlush: 'Toaleta pokładowa: E / AKCJA – usiądź',
+    hintFlushSeated: 'Na toalecie: E / AKCJA spuszcza wodę · ruszaj się lub WSTAŃ, by wstać',
+    wcSit: 'Siedzisz na toalecie pokładowej. E / AKCJA spuszcza wodę, ruch podnosi cię z powrotem.',
+    wcOccupied: 'Zajęte! Na toalecie pokładowej siedzi turysta.',
+    flush: 'Spłuczka! Gumowa kaczuszka tańczy …',
+    loadError: 'Błąd ładowania: ',
+    tourError: 'Błąd turystów: '
   }
 };
-const T = (key) => (TX[UI.settings.lang] && TX[UI.settings.lang][key]) || TX.de[key] || key;
+const T = (key) => (TX[UI.settings.lang] && TX[UI.settings.lang][key]) || TX.en[key] || key;
 
 /* ------------------------------------------------------------
    Konstanten
@@ -120,7 +171,6 @@ const PHYS = {
 const O2_SECONDS = 660;
 const O2_RECHARGE = 0.22;
 const LOOK_STICK = 2.2;
-const LOOK_KEYS = 1.9;
 const LOOK_POINTER = 0.0045;
 
 const TICKET_PER_SIGHT = 40;     // Fahrpreis je Sehenswürdigkeit
@@ -129,6 +179,19 @@ const PILLS_COOLDOWN = 24;       // Sekunden
 const CHAMPAGNE_COOLDOWN = 8;
 const FISH_MIN_SIZE = 2.3;       // ab dieser Länge reagieren Touristen auf Fische
 const SHOCK_TIME = 1.8;          // Quallen-Schock (Sekunden)
+
+/* Bord-Bar-Limit: jeder Passagier nur 1x bedient, max. 6 Verkäufe pro Tour */
+const BAR_MAX_SALES = 6;
+const BAR_PRICE_MIN = 25;
+const BAR_PRICE_MAX = 50;
+const BAR_STAR_BONUS = 5;        // € je Stern über 3.0 (max. +10 bei 5 Sternen)
+
+/* Riesenfisch-/Anglerfisch-Bounce (Level 2 + 3) */
+const GIANT_SIZE_MIN = 7;        // Fische/Tiere ab dieser Größe zählen als "Riese"
+const GIANT_DEFAULT_RADIUS = 9;  // Körperradius, wenn das Level keinen angibt
+const GIANT_BOUNCE = 9;          // Rückstoß-Geschwindigkeit weg vom Monster (m/s)
+const GIANT_POPUP_CD = 2.5;      // Sekunden zwischen zwei Warn-Popups
+const RUMBLE_TIME = 0.7;         // weiches Kamera-Rütteln nach dem Rückstoß
 
 const MP_SEND_INTERVAL = 1 / 15; // Multiplayer: 15 Zustands-Pakete pro Sekunde
 const MP_SPAWN_OFFSET = 8;       // Gast startet 8 m neben dem Host
@@ -144,6 +207,7 @@ const DEFAULT_SIGHT_META = {
   icons: ['🚢', '💎', '🐋'],
   names: { de: ['Wrack', 'Kathedrale', 'Riesenwal'], en: ['Wreck', 'Cathedral', 'Giant whale'] }
 };
+const sightNamesFor = (lang) => (sightMeta.names[toDispLang(lang)] || sightMeta.names.en || sightMeta.names.de);
 
 /* ------------------------------------------------------------
    Speicherstand: Geld + Upgrades (bleiben zwischen den Touren)
@@ -175,8 +239,6 @@ function applyShopSkins() {
   if (!sub) return;
   try { Shop.applyEquipped({ sub, tourists }); } catch (err) { console.error('[Shop]', err); }
 }
-
-
 
 /* ------------------------------------------------------------
    Level-2/3-Freischaltung (dauerhaft in localStorage)
@@ -265,6 +327,8 @@ canvas.style.display = 'block';
 canvas.style.width = '100%';
 canvas.style.height = '100%';
 canvas.style.touchAction = 'none';
+canvas.style.userSelect = 'none';
+canvas.style.webkitUserSelect = 'none';
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 host.appendChild(canvas);
 if (host.clientHeight < 50) {
@@ -306,6 +370,7 @@ let currentLevelId = 1;      // 1 = Arctic Trench (world.js), 2 = Coral Reef (le
 let worldCfg = WORLD;
 let sightMeta = DEFAULT_SIGHT_META;
 let shockT = 0;              // Quallen-Schock
+let rumbleT = 0;             // weiches Kamera-Rütteln nach Riesen-Bounce
 
 let mode = 'ext';            // 'ext' | 'cockpit' | 'walk'
 let snapCam = true;
@@ -340,7 +405,16 @@ let settled = false;         // Tour abgerechnet
 let tourEarned = 0;          // in dieser Tour verdientes Geld
 let lastRating = 4;
 const barCd = { pills: 0, champagne: 0 };
+let barSold = 0;             // Bar-Verkäufe in dieser Tour
+let barCapacity = BAR_MAX_SALES;   // = Anzahl Passagiere (max. 6)
 const pingsOut = [];
+
+let controlsHintShown = false;     // 5-Sekunden-Steuerungs-Overlay nur beim ersten Level-Start
+
+/* Riesenfisch-Bounce */
+let giantRefs = [];
+let giantCd = 0;
+let giantWarned = false;
 
 /* Multiplayer-Zustand */
 let mpSeed = null;           // gemeinsamer Seed für den Level-Aufbau (null = Singleplayer)
@@ -355,6 +429,8 @@ const _camTarget = new THREE.Vector3();
 const _camLook = new THREE.Vector3();
 const _zeroVel = new THREE.Vector3();
 const _fv = new THREE.Vector3();
+const _gp = new THREE.Vector3();
+const _gn = new THREE.Vector3();
 const colPts = [];
 const _c0 = new THREE.Vector3();
 const _d = new THREE.Vector3();
@@ -479,7 +555,7 @@ const holds = { forward: false, back: false, left: false, right: false, up: fals
 let lookDX = 0, lookDY = 0;
 
 const GAME_CODES = new Set([
-  'KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyF', 'KeyG', 'KeyC', 'KeyE', 'KeyQ',
+  'KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyZ', 'KeyQ', 'KeyF', 'KeyG', 'KeyC', 'KeyE',
   'Space', 'ShiftLeft', 'ShiftRight', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
   'Enter', 'Tab', 'Escape', 'KeyP'
 ]);
@@ -518,7 +594,6 @@ window.addEventListener('keydown', (e) => {
     case 'KeyE':
       if (mode === 'walk') { if (!interact()) toggleStand(); } else toggleStand();
       break;
-    case 'KeyQ':
     case 'Enter': interact(); break;
     default: break;
   }
@@ -569,6 +644,12 @@ window.addEventListener('pointercancel', endLook);
 document.addEventListener('touchmove', (e) => { if (isPlaying()) e.preventDefault(); }, { passive: false });
 ['gesturestart', 'gesturechange', 'gestureend'].forEach((n) => {
   document.addEventListener(n, (e) => { if (isPlaying()) e.preventDefault(); });
+});
+// Kein Text-Markieren im Spiel (außer in Eingabefeldern)
+document.addEventListener('selectstart', (e) => {
+  const t = e.target;
+  if (t && t.closest && t.closest('input, textarea')) return;
+  e.preventDefault();
 });
 
 /* ------------------------------------------------------------
@@ -672,20 +753,33 @@ function toggleArm() {
   UI.showMessage(T(on ? 'armOut' : 'armIn'), null, 1800);
 }
 
-/* ---------- Bord-Bar ---------- */
+/* ---------- Bord-Bar (jeder Passagier nur 1x, max. 6 Verkäufe pro Tour) ---------- */
+function barPrice() {
+  const rating = tourists ? tourists.averageRating() : lastRating;
+  const base = BAR_PRICE_MIN + Math.random() * (BAR_PRICE_MAX - BAR_PRICE_MIN);
+  const bonus = Math.max(0, rating - 3) * BAR_STAR_BONUS;
+  return Math.round(base + bonus);
+}
+
 function serveBar(kind) {
+  if (barSold >= barCapacity) {
+    UI.showMessage('msgBarSoldOut', null, 3000);
+    return true;
+  }
   if (barCd[kind] > 0) {
     UI.showMessage('msgBarCd', null, 1800);
     return true;
   }
-  let eur;
-  if (kind === 'pills') {
-    eur = tourists ? tourists.buyPills() : 30;
-    barCd.pills = PILLS_COOLDOWN;
-  } else {
-    eur = tourists ? tourists.serveChampagne() : 20;
-    barCd.champagne = CHAMPAGNE_COOLDOWN;
+  // Effekte der Touristen (Rausch, Jubel) auslösen – den Betrag bestimmen wir selbst
+  if (tourists) {
+    try {
+      if (kind === 'pills') tourists.buyPills();
+      else tourists.serveChampagne();
+    } catch (err) { console.error('[Touristen] Bar', err); }
   }
+  barCd[kind] = kind === 'pills' ? PILLS_COOLDOWN : CHAMPAGNE_COOLDOWN;
+  barSold++;
+  const eur = barPrice();
   sub.serve(kind);
   addMoney(eur);
   UI.showMessage(kind === 'pills' ? 'msgPills' : 'msgChampagne', { eur }, 3800);
@@ -795,6 +889,7 @@ function purgeScene(sc) {
 function disposeLevel() {
   running = false;
   onToilet = false;
+  giantRefs = [];
   UI.setRatingActive(false);
   UI.showHigh(null);
   if (tourists) {
@@ -802,8 +897,8 @@ function disposeLevel() {
     tourists = null;
   }
   mp.detachGhost();               // U-Boot + Namensschild des Mitspielers entfernen (Verbindung bleibt)
-    Shop.detachFx();
-   if (sub) { sub.dispose(); sub = null; }
+  Shop.detachFx();
+  if (sub) { sub.dispose(); sub = null; }
   if (level) { try { level.dispose(); } catch (err) { console.error(err); } level = null; }
   purgeScene(scene);
   scene = null;
@@ -816,9 +911,10 @@ function resetState() {
   pitch = 0; yawVel = 0;
   thrS = steerS = vertS = 0;
   o2 = 1; o2LowShown = false; o2Charging = false; darkShown = false;
-  lastNear = null; bumpCd = 0; shockT = 0;
+  lastNear = null; bumpCd = 0; shockT = 0; rumbleT = 0; giantCd = 0;
   allSights = false; settled = false; tourEarned = 0; lastRating = 4;
   barCd.pills = 0; barCd.champagne = 0;
+  barSold = 0; barCapacity = BAR_MAX_SALES;
   onToilet = false; fishWatchT = 0; fishInside = new WeakSet();
   later.length = 0;
   lookYaw = lookPitch = 0;
@@ -828,8 +924,8 @@ function resetState() {
   sub.group.rotation.set(0, yaw, 0, 'YXZ');
   sub.group.updateMatrixWorld(true);
   sub.updateDisplays({
-    lang: UI.settings.lang, money, rating: lastRating,
-    sightIcons: sightMeta.icons, sightNames: sightMeta.names[UI.settings.lang] || sightMeta.names.de
+    lang: toDispLang(), money, rating: lastRating,
+    sightIcons: sightMeta.icons, sightNames: sightNamesFor()
   });
   applyUpgrades();
   mode = 'ext';
@@ -839,6 +935,100 @@ function resetState() {
   ['light', 'arm'].forEach((a) => UI.setButtonState(a, false));
   UI.updateMoney(money, 0);
   UI.updateHUD({ depth: 0, o2: 1, sights: [false, false, false], objective: 'objSights', objVars: { n: 0 } });
+}
+
+/* ------------------------------------------------------------
+   Riesenfisch / Anglerfisch: Bounce-Kollision (Level 2 + 3)
+   Das Level wird nicht verändert. Wir suchen die Riesen automatisch:
+     level.giants = [{ pos|position|group|mesh, radius }]   (empfohlen)
+     level.shark / monster / anglerfish / angler / bigFish / giantFish
+     Schwarm-Fische (level.schools) und Herden (level.fauna.pods) mit size >= GIANT_SIZE_MIN
+   ------------------------------------------------------------ */
+function giantPos(o, out) {
+  if (!o) return null;
+  if (o.isVector3) return out.copy(o);
+  if (o.isObject3D) return o.getWorldPosition(out);
+  if (o.pos && o.pos.isVector3) return out.copy(o.pos);
+  if (o.position && o.position.isVector3) return out.copy(o.position);
+  const obj = o.group || o.mesh || o.root || o.body;
+  if (obj && obj.isObject3D) return obj.getWorldPosition(out);
+  return null;
+}
+
+function giantRadius(o) {
+  const r = Number(o && (o.bounceRadius || o.radius));
+  if (r > 0) return r;
+  const s = Number(o && o.size);
+  if (s > 0) return s * 0.5;
+  return GIANT_DEFAULT_RADIUS;
+}
+
+function collectGiants() {
+  giantRefs = [];
+  if (!level || currentLevelId < 2) return;
+  const add = (ref) => {
+    if (!ref || typeof ref !== 'object') return;
+    for (let i = 0; i < giantRefs.length; i++) if (giantRefs[i].ref === ref) return;
+    giantRefs.push({ ref, radius: giantRadius(ref) });
+  };
+
+  if (Array.isArray(level.giants)) level.giants.forEach(add);
+  ['shark', 'monster', 'anglerfish', 'angler', 'bigFish', 'giantFish'].forEach((k) => { if (level[k]) add(level[k]); });
+
+  if (Array.isArray(level.schools)) {
+    level.schools.forEach((s) => {
+      if (s && s.fish) s.fish.forEach((f) => { if (f && f.size >= GIANT_SIZE_MIN) add(f); });
+    });
+  }
+  const fa = level.fauna;
+  if (fa && Array.isArray(fa.pods)) {
+    fa.pods.forEach((pod) => {
+      if (pod && pod.members) pod.members.forEach((m) => { if (m && m.size >= GIANT_SIZE_MIN) add(m); });
+    });
+  }
+
+  if (!giantRefs.length && !giantWarned) {
+    giantWarned = true;
+    console.warn('[Bounce] Kein Riesenfisch gefunden. Im Level z. B. "giants: [{ pos: monster.position, radius: 40 }]" zurückgeben.');
+  }
+}
+
+function bounceGiants(dt) {
+  if (!giantRefs.length) return;
+  const g = sub.group;
+  const sp = g.position;
+  giantCd = Math.max(0, giantCd - dt);
+  let moved = false;
+
+  for (let i = 0; i < giantRefs.length; i++) {
+    const gr = giantRefs[i];
+    const p = giantPos(gr.ref, _gp);
+    if (!p) continue;
+    _gn.subVectors(sp, p);
+    const dist = _gn.length();
+    const minDist = gr.radius + (SUB.collisionRadius || 2.5);
+    if (dist >= minDist) continue;
+
+    if (dist < 0.001) _gn.set(0, 0.3, 1).normalize();
+    else _gn.multiplyScalar(1 / dist);
+
+    // Position sanft aus dem Körper herausschieben
+    const pen = minDist - dist;
+    sp.addScaledVector(_gn, pen * damp(9, dt));
+    moved = true;
+
+    // Bounce-Impuls: Geschwindigkeit weich in Richtung "weg vom Monster" ziehen
+    const vn = vel.dot(_gn);
+    if (vn < GIANT_BOUNCE) vel.addScaledVector(_gn, (GIANT_BOUNCE - vn) * damp(14, dt));
+
+    if (giantCd <= 0) {
+      giantCd = GIANT_POPUP_CD;
+      rumbleT = RUMBLE_TIME;
+      UI.showMessage('msgGiantBounce', null, 2600);
+      tEvent('ice');
+    }
+  }
+  if (moved) g.updateMatrixWorld(true);
 }
 
 function buildGame() {
@@ -872,15 +1062,18 @@ function buildGame() {
   scene.add(sub.group);
   worldCtx.subPos = sub.group.position;
   resetState();
+  collectGiants();
 
   try {
     tourists = createTourists(THREE, sub.group, sub.cabin, {
       count: 4 + Math.floor(Math.random() * 3),
       volume: 0.5,
-      lang: () => UI.settings.lang,
+      lang: () => toDispLang(),
       onRating: (info) => { lastRating = info.avg; UI.updateRating(info); }
     });
     tourists.setUpgrades({ golden: owned.golden });
+    // Bar-Limit: ein Verkauf pro Passagier, höchstens 6
+    barCapacity = Math.max(1, Math.min(BAR_MAX_SALES, tourists.tourists.length || BAR_MAX_SALES));
     UI.setRatingActive(true);
     UI.updateMoney(money, 0);
     console.log('[Touristen] erstellt:', tourists.tourists.length);
@@ -903,6 +1096,12 @@ function buildGame() {
   focusCanvas();
   UI.setMode('modeExt');
   lastT = performance.now();
+
+  // 5-Sekunden-Steuerungs-Overlay beim ersten Level-Start
+  if (!controlsHintShown) {
+    controlsHintShown = true;
+    UI.showControlsOverlay(5000);
+  }
 }
 
 function startLevel() {
@@ -1016,12 +1215,17 @@ function camCollide(p) {
   level.collideSub(p, _zeroVel, 1.2);
 }
 
+/* Weiches, niederfrequentes Rütteln (Sinus statt Zufall – kein Geflacker) */
 function applyShake() {
-  if (shockT <= 0) return;
-  const a = 0.5 * clamp(shockT / SHOCK_TIME, 0, 1);
-  camera.position.x += (Math.random() - 0.5) * a;
-  camera.position.y += (Math.random() - 0.5) * a;
-  camera.position.z += (Math.random() - 0.5) * a;
+  const a = Math.max(
+    0.22 * clamp(shockT / SHOCK_TIME, 0, 1),
+    0.28 * clamp(rumbleT / RUMBLE_TIME, 0, 1)
+  );
+  if (a <= 0) return;
+  const t = simTime;
+  camera.position.x += Math.sin(t * 17.0) * a * 0.5;
+  camera.position.y += Math.sin(t * 21.0 + 1.3) * a * 0.5;
+  camera.position.z += Math.sin(t * 14.0 + 2.1) * a * 0.5;
 }
 
 function updateCamera(dt) {
@@ -1143,8 +1347,11 @@ function updateNearHint() {
   const id = onToilet ? 'toilet' : sub.nearestInteractable(walkPos);
   if (id === lastNear) return;
   lastNear = id;
-  if (id === 'pills' || id === 'champagne') UI.showMessage('msgBarHint', null, 3500);
-  else if (id === 'toilet') UI.showMessage(T(onToilet ? 'hintFlushSeated' : 'hintFlush'), null, 3500);
+  if (id === 'pills' || id === 'champagne') {
+    UI.showMessage(barSold >= barCapacity ? 'msgBarSoldOut' : 'msgBarHint', null, 3500);
+  } else if (id === 'toilet') {
+    UI.showMessage(T(onToilet ? 'hintFlushSeated' : 'hintFlush'), null, 3500);
+  }
 }
 
 function updateOxygen(dt) {
@@ -1185,6 +1392,7 @@ function updateOxygen(dt) {
 function simulate(dt) {
   simTime += dt;
   bumpCd = Math.max(0, bumpCd - dt);
+  rumbleT = Math.max(0, rumbleT - dt);
   barCd.pills = Math.max(0, barCd.pills - dt);
   barCd.champagne = Math.max(0, barCd.champagne - dt);
 
@@ -1192,19 +1400,21 @@ function simulate(dt) {
     if (simTime >= later[i].t) { const fn = later[i].fn; later.splice(i, 1); fn(); }
   }
 
-  /* ---- Eingaben einsammeln ---- */
+  /* ---- Eingaben einsammeln ----
+     Pfeile + WASD + ZQSD steuern (Z = vor, Q = links für AZERTY). Umschauen: Maus/Finger/Stick. */
   const k = (c) => keys.has(c);
   const pad = readPad();
 
-  let thr = (k('KeyW') ? 1 : 0) - (k('KeyS') ? 1 : 0)
+  let thr = ((k('KeyW') || k('KeyZ') || k('ArrowUp')) ? 1 : 0)
+          - ((k('KeyS') || k('ArrowDown')) ? 1 : 0)
           + (holds.forward ? 1 : 0) - (holds.back ? 1 : 0);
-  let steer = (k('KeyD') ? 1 : 0) - (k('KeyA') ? 1 : 0)
+  let steer = ((k('KeyD') || k('ArrowRight')) ? 1 : 0)
+            - ((k('KeyA') || k('KeyQ') || k('ArrowLeft')) ? 1 : 0)
             + (holds.right ? 1 : 0) - (holds.left ? 1 : 0);
   let vert = (k('Space') ? 1 : 0) - ((k('ShiftLeft') || k('ShiftRight')) ? 1 : 0)
            + (holds.up ? 1 : 0) - (holds.down ? 1 : 0);
-  let lookX = (k('ArrowRight') ? 1 : 0) - (k('ArrowLeft') ? 1 : 0);
-  let lookY = (k('ArrowUp') ? 1 : 0) - (k('ArrowDown') ? 1 : 0);
-  const keyLook = lookX !== 0 || lookY !== 0;
+  let lookX = 0;
+  let lookY = 0;
   const run = k('ShiftLeft') || k('ShiftRight');
 
   let stickLook = false;
@@ -1229,12 +1439,11 @@ function simulate(dt) {
   lookY = clamp(lookY, -1, 1);
 
   /* ---- Umschauen ---- */
-  const rate = stickLook ? LOOK_STICK : LOOK_KEYS;
-  lookYaw -= lookX * rate * dt;
-  lookPitch += lookY * rate * dt;
+  lookYaw -= lookX * LOOK_STICK * dt;
+  lookPitch += lookY * LOOK_STICK * dt;
   lookYaw -= lookDX * LOOK_POINTER;
   lookPitch -= lookDY * LOOK_POINTER;
-  const looked = keyLook || stickLook || lookDX !== 0 || lookDY !== 0;
+  const looked = stickLook || lookDX !== 0 || lookDY !== 0;
   lookDX = 0; lookDY = 0;
   lookIdle = looked ? 0 : lookIdle + dt;
 
@@ -1278,16 +1487,20 @@ function simulate(dt) {
     shockT = Math.max(0, shockT - dt);
     driveThr *= 0.12; driveSteer *= 0.12; driveVert *= 0.12;
     vel.multiplyScalar(Math.exp(-2.5 * dt));
-    yawVel += (Math.random() - 0.5) * 0.8;
+    yawVel += (Math.random() - 0.5) * 0.3 * (dt * 60);
   }
 
   stepSub(dt, driveThr, driveSteer, driveVert);
+
+  /* ---- Riesenfisch / Anglerfisch: sanft zurückstoßen (Level 2 + 3) ---- */
+  bounceGiants(dt);
 
   /* ---- U-Boot-Modell animieren ---- */
   const g = sub.group;
   sub.update(dt, { throttle: thrS, steerYaw: steerS, steerPitch: vertS, underwater: g.position.y < 0 });
   sub.setCaptainVisible(mode === 'ext');
-Shop.updateFx(dt, thrS);
+  Shop.updateFx(dt, thrS);
+
   /* ---- Touristen ---- */
   if (tourists) {
     try {
@@ -1340,9 +1553,9 @@ Shop.updateFx(dt, thrS);
     depth: depthShown, o2, speed: vel.length(), heading,
     sightsDone, pings: pingsOut,
     money, rating: tourists ? tourists.averageRating() : lastRating,
-    lang: UI.settings.lang,
+    lang: toDispLang(),
     sightIcons: sightMeta.icons,
-    sightNames: sightMeta.names[UI.settings.lang] || sightMeta.names.de
+    sightNames: sightNamesFor()
   });
 
   const obj = currentObjective();
@@ -1411,14 +1624,14 @@ UI.initUI({
     disposeLevel();
     UI.setHUDVisible(false);
     UI.setTouchVisible(false);
-         if (btnMenu) btnMenu.style.display = 'none';
+    if (btnMenu) btnMenu.style.display = 'none';
     UI.showMenu({ inGame: false });
   },
   onBuyUpgrade: (id) => buyUpgrade(id),
   onSettingsChange: (s) => { if (level) level.setViewDistance(s.view); },
   onLanguageChange: (lang) => {
-    if (sub) sub.updateDisplays({ lang, sightNames: sightMeta.names[lang] || sightMeta.names.de });
-   Shop.refreshShop();
+    if (sub) sub.updateDisplays({ lang: toDispLang(lang), sightNames: sightNamesFor(lang) });
+    Shop.refreshShop();
   },
 
   // ----- Multiplayer -----
@@ -1447,8 +1660,9 @@ UI.initUI({
     UI.setMpBarActive(false);
   }
 });
+// Shop bekommt nur 'de' oder 'en' (andere Sprachen -> Englisch)
 Shop.initShop({
-  getLang: () => UI.settings.lang,
+  getLang: () => toDispLang(),
   getMoney: () => money,
   spend: (n) => spendMoney(n),
   onEquipChange: () => applyShopSkins()
@@ -1465,6 +1679,8 @@ focusCanvas();
 //   BEYOND.addMoney(500)                → Geld für den Shop
 //   BEYOND.unlockLevel2()               → Level 2 sofort freischalten (wird gespeichert)
 //   BEYOND.unlockLevel3()               → Level 3 sofort freischalten (wird gespeichert)
+//   BEYOND.giants                       → erkannte Riesenfische (Bounce-Kollision)
+//   BEYOND.barSold / BEYOND.barCapacity → Bord-Bar-Verkäufe dieser Tour
 //   BEYOND.tourists.buyPills()          → Rausch auslösen
 //   BEYOND.tourists.tourists[0].startTrip() → ein Tourist geht sofort aufs Klo
 //   BEYOND.resetSave()                  → Geld + Upgrades löschen
@@ -1477,6 +1693,9 @@ window.BEYOND = {
   get levelId() { return currentLevelId; },
   get level2Unlocked() { return level2Unlocked; },
   get level3Unlocked() { return level3Unlocked; },
+  get giants() { return giantRefs; },
+  get barSold() { return barSold; },
+  get barCapacity() { return barCapacity; },
   get mp() { return mp; },
   visitAll() { if (level) level.visitAll(); },
   addMoney(n) { addMoney(n || 100); },
