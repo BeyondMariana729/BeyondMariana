@@ -1287,7 +1287,7 @@ function simulate(dt) {
   const g = sub.group;
   sub.update(dt, { throttle: thrS, steerYaw: steerS, steerPitch: vertS, underwater: g.position.y < 0 });
   sub.setCaptainVisible(mode === 'ext');
-
+Shop.updateFx(dt, thrS);
   /* ---- Touristen ---- */
   if (tourists) {
     try {
@@ -1418,6 +1418,7 @@ UI.initUI({
   onSettingsChange: (s) => { if (level) level.setViewDistance(s.view); },
   onLanguageChange: (lang) => {
     if (sub) sub.updateDisplays({ lang, sightNames: sightMeta.names[lang] || sightMeta.names.de });
+   Shop.refreshShop();
   },
 
   // ----- Multiplayer -----
@@ -1446,7 +1447,12 @@ UI.initUI({
     UI.setMpBarActive(false);
   }
 });
-
+Shop.initShop({
+  getLang: () => UI.settings.lang,
+  getMoney: () => money,
+  spend: (n) => spendMoney(n),
+  onEquipChange: () => applyShopSkins()
+});
 // gespeicherten Stand an die Level-Auswahl geben: Level 2 und 3 bleiben nach dem Neuladen freigeschaltet
 UI.setLevel2Unlocked(level2Unlocked);
 UI.setLevel3Unlocked(level3Unlocked);
