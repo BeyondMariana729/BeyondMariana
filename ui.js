@@ -3,12 +3,14 @@
    Menüs (PLAY / SETTINGS / Level-Auswahl: Level 1 Arctic Trench,
    Level 2 Coral Reef – freigeschaltet nach der ersten Level-1-Tour,
    Level 3 Mariana Trench – freigeschaltet nach der ersten Level-2-Tour),
-   Sprachen (DE/EN), Einstellungen (Sichtweite), HUD-Helfer
+   5 Sprachen (EN, DE, FR, NL, PL – Start immer Englisch, Fallback Englisch),
+   Einstellungen (Sprache, Sichtweite), HUD-Helfer
    (inkl. setSightIcons), Meldungen, Gamepad-Menüsteuerung,
    permanente Leiste oben: Live-Sterne + Geld (€),
    Tour-Abrechnung mit Upgrade-Shop,
    MULTIPLAYER-Menü (Spielername, Spiel erstellen / beitreten),
-   Multiplayer-Leiste "DU: x € | Freund: y €"
+   Multiplayer-Leiste "DU: x € | Freund: y €",
+   5-Sekunden-Steuerungs-Overlay (CrazyGames)
 
    Menü-Screens (index.html):
      main · play · levels · multiplayer · mphost · mpjoin · settings
@@ -25,8 +27,12 @@ const MP_NAME_KEY = 'beyond-mariana-mp-name';
 export const LEVEL2_KEY = 'beyondMariana_level2Unlocked';
 export const LEVEL3_KEY = 'beyondMariana_level3Unlocked';
 
+/* ---------- Sprachen ---------- */
+export const LANGS = ['en', 'de', 'fr', 'nl', 'pl'];
+
 /* ---------- Einstellungen ---------- */
-export const settings = { lang: 'de', view: 1 };
+/* Erster Start (nichts gespeichert) = IMMER Englisch */
+export const settings = { lang: 'en', view: 1 };
 let level2Unlocked = false;
 let level3Unlocked = false;
 
@@ -34,11 +40,9 @@ try {
   const raw = localStorage.getItem(STORAGE_KEY);
   if (raw) {
     const o = JSON.parse(raw);
-    if (o.lang === 'de' || o.lang === 'en') settings.lang = o.lang;
+    if (LANGS.indexOf(o.lang) !== -1) settings.lang = o.lang;
     if (typeof o.view === 'number') settings.view = Math.min(1.6, Math.max(0.6, o.view));
     if (o.level2 === true) level2Unlocked = true;            // alter Spielstand
-  } else if (typeof navigator !== 'undefined' && /^en/i.test(navigator.language || '')) {
-    settings.lang = 'en';
   }
 } catch (e) { /* localStorage kann blockiert sein – kein Problem */ }
 
@@ -60,148 +64,7 @@ export const UPGRADES = [
 
 /* ---------- Texte ---------- */
 export const I18N = {
-  de: {
-    subtitle: 'MARIANA TOURS · Tiefsee-Touren mit Humor',
-    play: 'PLAY',
-    settings: 'SETTINGS',
-    resume: 'WEITER',
-    singleplayer: 'SINGLEPLAYER',
-    multiplayer: 'MULTIPLAYER',
-    story: 'STORY',
-    comingSoon: 'Coming Soon',
-    back: 'ZURÜCK',
-    chooseLevel: 'LEVEL WÄHLEN',
-    settingsTitle: 'EINSTELLUNGEN',
-    language: 'Sprache',
-    viewDistance: 'Sichtweite',
-    viewNear: 'kurz',
-    viewFar: 'weit',
-    controls: 'STEUERUNG',
-    helpKb: 'PC: WASD bewegen · Maus/Pfeile umschauen · Leertaste/Shift hoch/runter · F Licht · G Greifarm · C Kamera · E aufstehen/hinsetzen (an der Bord-Bar: Pillen/Champagner kaufen, am Bord-WC: hinsetzen & spülen) · Q/Enter Aktion · Esc Menü',
-    helpPad: 'Gamepad: linker Stick bewegen · rechter Stick umschauen · R2/L2 hoch/runter · L1 Licht · Y Kamera · X aufstehen/hinsetzen · A Aktion (Bar, WC) · B Greifarm · Start Menü',
-    helpTouch: 'iPad: Pfeil-Buttons links bewegen · AUF/AB rechts · Wischen zum Umschauen · Buttons für Licht, Kamera, Aufstehen, Greifarm und AKTION (Bar, Bord-WC)',
-    depth: 'TIEFE',
-    oxygen: 'SAUERSTOFF',
-    sights: 'SEHENSWÜRDIGKEITEN',
-    ratingLabel: 'TOUR-BEWERTUNG',
-    menu: 'MENÜ',
-    btnUp: 'AUF',
-    btnDown: 'AB',
-    btnLight: 'LICHT',
-    btnCam: 'KAMERA',
-    btnStand: 'AUFSTEHEN',
-    btnSit: 'HINSETZEN',
-    btnArm: 'ARM',
-    btnAction: 'AKTION',
-    level: 'Level',
-    locked: 'Gesperrt',
-    playable: 'Spielbar',
-    lvl1Name: 'Arctic Trench',
-    lvl1Desc: 'Eisloch, Wrack, Eis-Kathedrale und ein 150-Meter-Wal – Tour für Touristen',
-    lvl2Name: 'Coral Reef',
-    lvl2Desc: 'Bunte Korallen, Felsbogen, Piraten-Schatz, Riffhai – und Quallen, die zwicken!',
-    lvl2LockedDesc: 'Gesperrt – schließe zuerst eine Tour in Level 1 ab',
-    lvl3Name: 'Mariana Trench',
-    lvl3Desc: '11.000 m tief: glühende Lava-Felder, Black Smokers, ein Forschungs-U-Boot – und ein Monster!',
-    lvl3LockedDesc: 'Gesperrt – schließe zuerst eine Tour in Level 2 ab',
-    lvlLockedDesc: 'Noch nicht verfügbar',
-    lockedToast: 'Dieses Level ist noch gesperrt.',
-    lvl2LockedToast: 'Level 2 ist gesperrt – beende zuerst eine Tour in Level 1!',
-    lvl3LockedToast: 'Level 3 ist gesperrt – beende zuerst eine Tour in Level 2!',
-    modeExt: 'AUSSEN-KAMERA',
-    modeCockpit: 'COCKPIT-KAMERA',
-    modeWalk: 'IM U-BOOT',
-    // Ziele
-    objSights: 'Besuche die Sehenswürdigkeiten ({n}/3) – folge den Pings im Radar',
-    objDock: 'Alle 3 gesehen! Zurück zur Plattform zum Andocken – oder erst noch Pillen verkaufen …',
-    objDone: 'Tour abgerechnet!',
-    // Meldungen Level 1
-    msgSight_wreck: 'Sehenswürdigkeit {n}/3: das gesunkene Schiffswrack!',
-    msgSight_cathedral: 'Sehenswürdigkeit {n}/3: die leuchtende Eiskristall-Kathedrale!',
-    msgSight_whale: 'Sehenswürdigkeit {n}/3: der 150-Meter-Polarwal!',
-    msgAllSights: 'Alle 3 Sehenswürdigkeiten gesehen – zurück zur Plattform zum Andocken!',
-    msgStalkerDark: 'Ein Frost-Stalker beobachtet dich im Dunkeln … schalte den Scheinwerfer ein!',
-    msgStalkerScared: 'Der Frost-Stalker ist vom Licht geblendet und weicht zurück.',
-    msgWhaleFound: 'Da ist er – ein gewaltiger Polarwal! Fahr ganz nah ran!',
-    // Meldungen Level 2
-    msgSight_arch: 'Sehenswürdigkeit {n}/3: durch den riesigen Felsbogen getaucht!',
-    msgSight_treasure: 'Sehenswürdigkeit {n}/3: die versunkene Piraten-Schatztruhe!',
-    msgSight_shark: 'Sehenswürdigkeit {n}/3: der große Riffhai!',
-    msgSharkFound: 'Da kreist er – ein riesiger Riffhai! Fahr ganz nah ran!',
-    msgJelly: 'Zzzzap! Eine Qualle hat das U-Boot geschockt!',
-    msgTreasureBonus: 'Piratenschatz geborgen: +{eur} € Bonus!',
-    msgLevel2Unlocked: 'Level 2 „Coral Reef“ freigeschaltet!',
-    // Meldungen Level 3
-    msgSight_lava: 'Sehenswürdigkeit {n}/3: das glühende Lava-Feld mit den Riesen-Schloten!',
-    msgSight_subwreck: 'Sehenswürdigkeit {n}/3: das versunkene Forschungs-U-Boot!',
-    msgSight_monster: 'Sehenswürdigkeit {n}/3: das Tiefsee-Monster! Bitte nicht füttern …',
-    msgLavaFound: 'Voraus glüht der Grund: ein gewaltiges Lava-Feld mit turmhohen Black Smokers!',
-    msgSubFound: 'Zwei Scheinwerfer in einer Felsspalte … ein gesunkenes Forschungs-U-Boot!',
-    msgMonsterFound: 'Was ist DAS?! Ein riesiger Anglerfisch mit leuchtender Lock-Angel – fahr näher ran!',
-    msgLevel3Unlocked: 'Level 3 „Mariana Trench“ freigeschaltet!',
-    // allgemein
-    msgO2Low: 'Sauerstoff wird knapp – zurück zur Plattform!',
-    msgO2Charged: 'Sauerstoff aufgeladen',
-    msgOxygenOut: 'Notaufstieg! Das U-Boot wurde zur Plattform gezogen.',
-    msgLightOn: 'Scheinwerfer an',
-    msgLightOff: 'Scheinwerfer aus',
-    msgDeepDark: 'Ab hier wird es stockdunkel – nutze den Scheinwerfer!',
-    msgPills: 'Tiefsee-Pillen verkauft: +{eur} €! Die Touristen sind … sehr entspannt.',
-    msgChampagne: 'Arktis-Champagner serviert: +{eur} €! (Es ist Leitungswasser.)',
-    msgBarCd: 'Die Theke macht gleich wieder auf …',
-    msgBarHint: 'Bord-Bar: E / AKTION verkauft Pillen bzw. Champagner',
-    msgBought: 'Upgrade gekauft!',
-    msgNoMoney: 'Nicht genug Geld!',
-    // Tour-Abrechnung & Shop
-    resTitle: 'TOUR-ABRECHNUNG',
-    resRating: 'Bewertung',
-    resEarned: 'Verdient',
-    resWallet: 'Kasse',
-    resLevelNew: '🔓 Level 2 freigeschaltet: Coral Reef!',
-    resLevelNew3: '🔓 Level 3 freigeschaltet: Mariana Trench!',
-    resLevelOk: '🏆 Top-Tour! Die Touristen sind begeistert.',
-    resLevelNo: 'Ab 3.5 ★ gilt eine Tour als Top-Tour – diesmal leider nicht.',
-    shopTitle: 'UPGRADE-SHOP',
-    buy: 'KAUFEN',
-    owned: 'GEKAUFT',
-    resContinue: 'NÄCHSTE TOUR',
-    resMenu: 'ZUM MENÜ',
-    upGolden: 'Goldene Beheizte Klobrille',
-    upGoldenDesc: '+0,3 ★ Bonus bei jedem WC-Gang',
-    upFog: 'Nebelscheinwerfer',
-    upFogDesc: 'Durchdringt den dunklen Tiefsee-Nebel viel besser',
-    upFlood: 'Mega-Flutlicht',
-    upFloodDesc: 'Deutlich hellerer, weiterer Frontscheinwerfer',
-    // Multiplayer
-    mpTitle: 'MULTIPLAYER',
-    mpName: 'Spielername',
-    mpNamePh: 'z. B. CaptainMax',
-    mpHost: 'SPIEL ERSTELLEN',
-    mpHostSub: 'Du bist der Host – dein Freund tritt per Code bei',
-    mpJoin: 'SPIEL BEITRETEN',
-    mpJoinSub: 'Code vom Host eingeben',
-    mpHostTitle: 'SPIEL ERSTELLEN',
-    mpJoinTitle: 'SPIEL BEITRETEN',
-    mpRoomCode: 'RAUM-CODE',
-    mpCodeLabel: '4-stelliger Raum-Code',
-    mpCreating: 'Raum wird erstellt …',
-    mpWaiting: 'Warte auf Mitspieler …',
-    mpChooseLevel: 'LEVEL FÜR BEIDE SPIELER',
-    mpL2Locked: 'Level 2 ist noch gesperrt – schließe zuerst eine Tour in Level 1 ab.',
-    mpL3Locked: 'Level 3 ist noch gesperrt – schließe zuerst eine Tour in Level 2 ab.',
-    mpCancel: 'ABBRECHEN',
-    mpGo: 'LOS!',
-    mpConnecting: 'Verbinde …',
-    mpGuestWait: 'Verbunden! Warte auf den Start durch den Host …',
-    mpJoined: '{name} ist beigetreten – es geht los!',
-    mpErrNoRoom: 'Raum nicht gefunden. Bitte den Code prüfen!',
-    mpErrCode: 'Bitte einen 4-stelligen Code eingeben.',
-    mpErrTimeout: 'Zeitüberschreitung – keine Verbindung zum Host möglich.',
-    mpErrLib: 'PeerJS konnte nicht geladen werden – bitte Internetverbindung prüfen.',
-    mpErrGeneric: 'Verbindungsfehler: {err}',
-    mpPeerLeft: '{name} hat das Spiel verlassen.',
-    mpYou: 'DU'
-  },
+  /* ================= ENGLISH (Basis + Fallback) ================= */
   en: {
     subtitle: 'MARIANA TOURS · Deep-sea tours with humor',
     play: 'PLAY',
@@ -219,7 +82,7 @@ export const I18N = {
     viewNear: 'short',
     viewFar: 'far',
     controls: 'CONTROLS',
-    helpKb: 'PC: WASD move · mouse/arrows look · Space/Shift up/down · F light · G grabber arm · C camera · E stand up/sit down (at the onboard bar: buy pills/champagne, at the onboard toilet: sit & flush) · Q/Enter action · Esc menu',
+    helpKb: 'PC: WASD / ZQSD / arrows steer · drag the mouse to look around · Space/Shift up/down · F light · G grabber arm · C camera · E stand up/sit down (at the onboard bar: buy pills/champagne, at the onboard toilet: sit & flush) · Enter action · Esc menu',
     helpPad: 'Gamepad: left stick move · right stick look · R2/L2 up/down · L1 light · Y camera · X stand up/sit down · A action (bar, toilet) · B grabber arm · Start menu',
     helpTouch: 'iPad: arrow buttons (left) move · UP/DOWN (right) · swipe to look · buttons for light, camera, standing up, grabber arm and ACTION (bar, onboard toilet)',
     depth: 'DEPTH',
@@ -287,8 +150,15 @@ export const I18N = {
     msgChampagne: 'Arctic champagne served: +€{eur}! (It is tap water.)',
     msgBarCd: 'The bar reopens in a moment …',
     msgBarHint: 'Onboard bar: E / ACTION sells pills or champagne',
+    msgBarSoldOut: 'SOLD OUT – every passenger has already been served!',
+    msgGiantBounce: 'Too close! The giant creature knocked the sub back!',
     msgBought: 'Upgrade purchased!',
     msgNoMoney: 'Not enough money!',
+    ctrlMove: 'WASD / ZQSD / Arrows = Steer',
+    ctrlVert: 'Space / Shift = Up / Down',
+    ctrlLight: 'F = Headlight',
+    ctrlTouchMove: 'On-screen joysticks = Steer & Up / Down',
+    ctrlTouchLight: 'Light button = Headlight',
     resTitle: 'TOUR SETTLEMENT',
     resRating: 'Rating',
     resEarned: 'Earned',
@@ -308,7 +178,6 @@ export const I18N = {
     upFogDesc: 'Cuts through the dark deep-sea murk much better',
     upFlood: 'Mega Floodlight',
     upFloodDesc: 'Much brighter, farther-reaching headlight',
-    // Multiplayer
     mpTitle: 'MULTIPLAYER',
     mpName: 'Player name',
     mpNamePh: 'e.g. CaptainMax',
@@ -337,6 +206,582 @@ export const I18N = {
     mpErrGeneric: 'Connection error: {err}',
     mpPeerLeft: '{name} left the game.',
     mpYou: 'YOU'
+  },
+
+  /* ================= DEUTSCH ================= */
+  de: {
+    subtitle: 'MARIANA TOURS · Tiefsee-Touren mit Humor',
+    play: 'PLAY',
+    settings: 'SETTINGS',
+    resume: 'WEITER',
+    singleplayer: 'SINGLEPLAYER',
+    multiplayer: 'MULTIPLAYER',
+    story: 'STORY',
+    comingSoon: 'Coming Soon',
+    back: 'ZURÜCK',
+    chooseLevel: 'LEVEL WÄHLEN',
+    settingsTitle: 'EINSTELLUNGEN',
+    language: 'Sprache',
+    viewDistance: 'Sichtweite',
+    viewNear: 'kurz',
+    viewFar: 'weit',
+    controls: 'STEUERUNG',
+    helpKb: 'PC: WASD / ZQSD / Pfeile steuern · Maus ziehen = umschauen · Leertaste/Shift hoch/runter · F Licht · G Greifarm · C Kamera · E aufstehen/hinsetzen (an der Bord-Bar: Pillen/Champagner kaufen, am Bord-WC: hinsetzen & spülen) · Enter Aktion · Esc Menü',
+    helpPad: 'Gamepad: linker Stick bewegen · rechter Stick umschauen · R2/L2 hoch/runter · L1 Licht · Y Kamera · X aufstehen/hinsetzen · A Aktion (Bar, WC) · B Greifarm · Start Menü',
+    helpTouch: 'iPad: Pfeil-Buttons links bewegen · AUF/AB rechts · Wischen zum Umschauen · Buttons für Licht, Kamera, Aufstehen, Greifarm und AKTION (Bar, Bord-WC)',
+    depth: 'TIEFE',
+    oxygen: 'SAUERSTOFF',
+    sights: 'SEHENSWÜRDIGKEITEN',
+    ratingLabel: 'TOUR-BEWERTUNG',
+    menu: 'MENÜ',
+    btnUp: 'AUF',
+    btnDown: 'AB',
+    btnLight: 'LICHT',
+    btnCam: 'KAMERA',
+    btnStand: 'AUFSTEHEN',
+    btnSit: 'HINSETZEN',
+    btnArm: 'ARM',
+    btnAction: 'AKTION',
+    level: 'Level',
+    locked: 'Gesperrt',
+    playable: 'Spielbar',
+    lvl1Name: 'Arctic Trench',
+    lvl1Desc: 'Eisloch, Wrack, Eis-Kathedrale und ein 150-Meter-Wal – Tour für Touristen',
+    lvl2Name: 'Coral Reef',
+    lvl2Desc: 'Bunte Korallen, Felsbogen, Piraten-Schatz, Riffhai – und Quallen, die zwicken!',
+    lvl2LockedDesc: 'Gesperrt – schließe zuerst eine Tour in Level 1 ab',
+    lvl3Name: 'Mariana Trench',
+    lvl3Desc: '11.000 m tief: glühende Lava-Felder, Black Smokers, ein Forschungs-U-Boot – und ein Monster!',
+    lvl3LockedDesc: 'Gesperrt – schließe zuerst eine Tour in Level 2 ab',
+    lvlLockedDesc: 'Noch nicht verfügbar',
+    lockedToast: 'Dieses Level ist noch gesperrt.',
+    lvl2LockedToast: 'Level 2 ist gesperrt – beende zuerst eine Tour in Level 1!',
+    lvl3LockedToast: 'Level 3 ist gesperrt – beende zuerst eine Tour in Level 2!',
+    modeExt: 'AUSSEN-KAMERA',
+    modeCockpit: 'COCKPIT-KAMERA',
+    modeWalk: 'IM U-BOOT',
+    objSights: 'Besuche die Sehenswürdigkeiten ({n}/3) – folge den Pings im Radar',
+    objDock: 'Alle 3 gesehen! Zurück zur Plattform zum Andocken – oder erst noch Pillen verkaufen …',
+    objDone: 'Tour abgerechnet!',
+    msgSight_wreck: 'Sehenswürdigkeit {n}/3: das gesunkene Schiffswrack!',
+    msgSight_cathedral: 'Sehenswürdigkeit {n}/3: die leuchtende Eiskristall-Kathedrale!',
+    msgSight_whale: 'Sehenswürdigkeit {n}/3: der 150-Meter-Polarwal!',
+    msgAllSights: 'Alle 3 Sehenswürdigkeiten gesehen – zurück zur Plattform zum Andocken!',
+    msgStalkerDark: 'Ein Frost-Stalker beobachtet dich im Dunkeln … schalte den Scheinwerfer ein!',
+    msgStalkerScared: 'Der Frost-Stalker ist vom Licht geblendet und weicht zurück.',
+    msgWhaleFound: 'Da ist er – ein gewaltiger Polarwal! Fahr ganz nah ran!',
+    msgSight_arch: 'Sehenswürdigkeit {n}/3: durch den riesigen Felsbogen getaucht!',
+    msgSight_treasure: 'Sehenswürdigkeit {n}/3: die versunkene Piraten-Schatztruhe!',
+    msgSight_shark: 'Sehenswürdigkeit {n}/3: der große Riffhai!',
+    msgSharkFound: 'Da kreist er – ein riesiger Riffhai! Fahr ganz nah ran!',
+    msgJelly: 'Zzzzap! Eine Qualle hat das U-Boot geschockt!',
+    msgTreasureBonus: 'Piratenschatz geborgen: +{eur} € Bonus!',
+    msgLevel2Unlocked: 'Level 2 „Coral Reef“ freigeschaltet!',
+    msgSight_lava: 'Sehenswürdigkeit {n}/3: das glühende Lava-Feld mit den Riesen-Schloten!',
+    msgSight_subwreck: 'Sehenswürdigkeit {n}/3: das versunkene Forschungs-U-Boot!',
+    msgSight_monster: 'Sehenswürdigkeit {n}/3: das Tiefsee-Monster! Bitte nicht füttern …',
+    msgLavaFound: 'Voraus glüht der Grund: ein gewaltiges Lava-Feld mit turmhohen Black Smokers!',
+    msgSubFound: 'Zwei Scheinwerfer in einer Felsspalte … ein gesunkenes Forschungs-U-Boot!',
+    msgMonsterFound: 'Was ist DAS?! Ein riesiger Anglerfisch mit leuchtender Lock-Angel – fahr näher ran!',
+    msgLevel3Unlocked: 'Level 3 „Mariana Trench“ freigeschaltet!',
+    msgO2Low: 'Sauerstoff wird knapp – zurück zur Plattform!',
+    msgO2Charged: 'Sauerstoff aufgeladen',
+    msgOxygenOut: 'Notaufstieg! Das U-Boot wurde zur Plattform gezogen.',
+    msgLightOn: 'Scheinwerfer an',
+    msgLightOff: 'Scheinwerfer aus',
+    msgDeepDark: 'Ab hier wird es stockdunkel – nutze den Scheinwerfer!',
+    msgPills: 'Tiefsee-Pillen verkauft: +{eur} €! Die Touristen sind … sehr entspannt.',
+    msgChampagne: 'Arktis-Champagner serviert: +{eur} €! (Es ist Leitungswasser.)',
+    msgBarCd: 'Die Theke macht gleich wieder auf …',
+    msgBarHint: 'Bord-Bar: E / AKTION verkauft Pillen bzw. Champagner',
+    msgBarSoldOut: 'AUSVERKAUFT – jeder Passagier wurde schon bedient!',
+    msgGiantBounce: 'Zu nah! Das Riesenwesen hat das U-Boot weggestoßen!',
+    msgBought: 'Upgrade gekauft!',
+    msgNoMoney: 'Nicht genug Geld!',
+    ctrlMove: 'WASD / ZQSD / Pfeile = Steuern',
+    ctrlVert: 'Leertaste / Shift = Hoch / Runter',
+    ctrlLight: 'F = Scheinwerfer',
+    ctrlTouchMove: 'On-Screen-Joysticks = Steuern & Hoch / Runter',
+    ctrlTouchLight: 'Licht-Button = Scheinwerfer',
+    resTitle: 'TOUR-ABRECHNUNG',
+    resRating: 'Bewertung',
+    resEarned: 'Verdient',
+    resWallet: 'Kasse',
+    resLevelNew: '🔓 Level 2 freigeschaltet: Coral Reef!',
+    resLevelNew3: '🔓 Level 3 freigeschaltet: Mariana Trench!',
+    resLevelOk: '🏆 Top-Tour! Die Touristen sind begeistert.',
+    resLevelNo: 'Ab 3.5 ★ gilt eine Tour als Top-Tour – diesmal leider nicht.',
+    shopTitle: 'UPGRADE-SHOP',
+    buy: 'KAUFEN',
+    owned: 'GEKAUFT',
+    resContinue: 'NÄCHSTE TOUR',
+    resMenu: 'ZUM MENÜ',
+    upGolden: 'Goldene Beheizte Klobrille',
+    upGoldenDesc: '+0,3 ★ Bonus bei jedem WC-Gang',
+    upFog: 'Nebelscheinwerfer',
+    upFogDesc: 'Durchdringt den dunklen Tiefsee-Nebel viel besser',
+    upFlood: 'Mega-Flutlicht',
+    upFloodDesc: 'Deutlich hellerer, weiterer Frontscheinwerfer',
+    mpTitle: 'MULTIPLAYER',
+    mpName: 'Spielername',
+    mpNamePh: 'z. B. CaptainMax',
+    mpHost: 'SPIEL ERSTELLEN',
+    mpHostSub: 'Du bist der Host – dein Freund tritt per Code bei',
+    mpJoin: 'SPIEL BEITRETEN',
+    mpJoinSub: 'Code vom Host eingeben',
+    mpHostTitle: 'SPIEL ERSTELLEN',
+    mpJoinTitle: 'SPIEL BEITRETEN',
+    mpRoomCode: 'RAUM-CODE',
+    mpCodeLabel: '4-stelliger Raum-Code',
+    mpCreating: 'Raum wird erstellt …',
+    mpWaiting: 'Warte auf Mitspieler …',
+    mpChooseLevel: 'LEVEL FÜR BEIDE SPIELER',
+    mpL2Locked: 'Level 2 ist noch gesperrt – schließe zuerst eine Tour in Level 1 ab.',
+    mpL3Locked: 'Level 3 ist noch gesperrt – schließe zuerst eine Tour in Level 2 ab.',
+    mpCancel: 'ABBRECHEN',
+    mpGo: 'LOS!',
+    mpConnecting: 'Verbinde …',
+    mpGuestWait: 'Verbunden! Warte auf den Start durch den Host …',
+    mpJoined: '{name} ist beigetreten – es geht los!',
+    mpErrNoRoom: 'Raum nicht gefunden. Bitte den Code prüfen!',
+    mpErrCode: 'Bitte einen 4-stelligen Code eingeben.',
+    mpErrTimeout: 'Zeitüberschreitung – keine Verbindung zum Host möglich.',
+    mpErrLib: 'PeerJS konnte nicht geladen werden – bitte Internetverbindung prüfen.',
+    mpErrGeneric: 'Verbindungsfehler: {err}',
+    mpPeerLeft: '{name} hat das Spiel verlassen.',
+    mpYou: 'DU'
+  },
+
+  /* ================= FRANÇAIS ================= */
+  fr: {
+    subtitle: 'MARIANA TOURS · Excursions en eaux profondes, avec humour',
+    play: 'JOUER',
+    settings: 'PARAMÈTRES',
+    resume: 'REPRENDRE',
+    singleplayer: 'SOLO',
+    multiplayer: 'MULTIJOUEUR',
+    story: 'HISTOIRE',
+    comingSoon: 'Bientôt disponible',
+    back: 'RETOUR',
+    chooseLevel: 'CHOISIR UN NIVEAU',
+    settingsTitle: 'PARAMÈTRES',
+    language: 'Langue',
+    viewDistance: 'Distance de vue',
+    viewNear: 'courte',
+    viewFar: 'longue',
+    controls: 'COMMANDES',
+    helpKb: 'PC : WASD / ZQSD / flèches pour piloter · glisser la souris pour regarder autour · Espace/Maj monter/descendre · F phare · G bras de préhension · C caméra · E se lever/s’asseoir (au bar de bord : acheter pilules/champagne, aux toilettes de bord : s’asseoir et tirer la chasse) · Entrée action · Échap menu',
+    helpPad: 'Manette : stick gauche piloter · stick droit regarder · R2/L2 monter/descendre · L1 phare · Y caméra · X se lever/s’asseoir · A action (bar, toilettes) · B bras de préhension · Start menu',
+    helpTouch: 'iPad : boutons fléchés à gauche pour piloter · HAUT/BAS à droite · glisser pour regarder · boutons pour phare, caméra, se lever, bras et ACTION (bar, toilettes de bord)',
+    depth: 'PROFONDEUR',
+    oxygen: 'OXYGÈNE',
+    sights: 'SITES À VISITER',
+    ratingLabel: 'NOTE DE L’EXCURSION',
+    menu: 'MENU',
+    btnUp: 'HAUT',
+    btnDown: 'BAS',
+    btnLight: 'PHARE',
+    btnCam: 'CAMÉRA',
+    btnStand: 'SE LEVER',
+    btnSit: 'S’ASSEOIR',
+    btnArm: 'BRAS',
+    btnAction: 'ACTION',
+    level: 'Niveau',
+    locked: 'Verrouillé',
+    playable: 'Jouable',
+    lvl1Name: 'Arctic Trench',
+    lvl1Desc: 'Trou dans la glace, épave, cathédrale de glace et baleine de 150 mètres – une excursion pour touristes',
+    lvl2Name: 'Coral Reef',
+    lvl2Desc: 'Coraux colorés, arche rocheuse, trésor de pirates, requin de récif – et des méduses qui piquent !',
+    lvl2LockedDesc: 'Verrouillé – terminez d’abord une excursion au niveau 1',
+    lvl3Name: 'Mariana Trench',
+    lvl3Desc: '11 000 m de profondeur : champs de lave incandescents, fumeurs noirs, un sous-marin de recherche – et un monstre !',
+    lvl3LockedDesc: 'Verrouillé – terminez d’abord une excursion au niveau 2',
+    lvlLockedDesc: 'Pas encore disponible',
+    lockedToast: 'Ce niveau est encore verrouillé.',
+    lvl2LockedToast: 'Le niveau 2 est verrouillé – terminez d’abord une excursion au niveau 1 !',
+    lvl3LockedToast: 'Le niveau 3 est verrouillé – terminez d’abord une excursion au niveau 2 !',
+    modeExt: 'CAMÉRA EXTÉRIEURE',
+    modeCockpit: 'CAMÉRA COCKPIT',
+    modeWalk: 'DANS LE SOUS-MARIN',
+    objSights: 'Visitez les sites ({n}/3) – suivez les pings sur le radar',
+    objDock: 'Les 3 sites sont vus ! Retournez à la plateforme pour accoster – ou vendez encore quelques pilules …',
+    objDone: 'Excursion réglée !',
+    msgSight_wreck: 'Site {n}/3 : l’épave du navire englouti !',
+    msgSight_cathedral: 'Site {n}/3 : la cathédrale de cristaux de glace lumineuse !',
+    msgSight_whale: 'Site {n}/3 : la baleine polaire de 150 mètres !',
+    msgAllSights: 'Les 3 sites sont vus – retournez à la plateforme pour accoster !',
+    msgStalkerDark: 'Un Traqueur de givre vous observe dans le noir … allumez le phare !',
+    msgStalkerScared: 'Le Traqueur de givre est ébloui par la lumière et recule.',
+    msgWhaleFound: 'La voilà – une gigantesque baleine polaire ! Approchez-vous !',
+    msgSight_arch: 'Site {n}/3 : traversée de l’immense arche rocheuse !',
+    msgSight_treasure: 'Site {n}/3 : le coffre au trésor des pirates englouti !',
+    msgSight_shark: 'Site {n}/3 : le grand requin de récif !',
+    msgSharkFound: 'Il tourne là – un énorme requin de récif ! Approchez-vous !',
+    msgJelly: 'Zzzzap ! Une méduse a électrisé le sous-marin !',
+    msgTreasureBonus: 'Trésor de pirates récupéré : +{eur} € de bonus !',
+    msgLevel2Unlocked: 'Niveau 2 « Coral Reef » débloqué !',
+    msgSight_lava: 'Site {n}/3 : le champ de lave incandescent avec ses cheminées géantes !',
+    msgSight_subwreck: 'Site {n}/3 : le sous-marin de recherche englouti !',
+    msgSight_monster: 'Site {n}/3 : le monstre des abysses ! Merci de ne pas le nourrir …',
+    msgLavaFound: 'Le fond rougeoie devant vous : un énorme champ de lave avec des fumeurs noirs hauts comme des tours !',
+    msgSubFound: 'Deux phares dans une crevasse … un sous-marin de recherche coulé !',
+    msgMonsterFound: 'C’est QUOI, ça ?! Une baudroie géante avec un leurre lumineux – approchez-vous !',
+    msgLevel3Unlocked: 'Niveau 3 « Mariana Trench » débloqué !',
+    msgO2Low: 'L’oxygène baisse – retournez à la plateforme !',
+    msgO2Charged: 'Oxygène rechargé',
+    msgOxygenOut: 'Remontée d’urgence ! Le sous-marin a été ramené à la plateforme.',
+    msgLightOn: 'Phare allumé',
+    msgLightOff: 'Phare éteint',
+    msgDeepDark: 'À partir d’ici, c’est le noir complet – utilisez le phare !',
+    msgPills: 'Pilules des abysses vendues : +{eur} € ! Les touristes sont … très détendus.',
+    msgChampagne: 'Champagne arctique servi : +{eur} € ! (C’est de l’eau du robinet.)',
+    msgBarCd: 'Le comptoir rouvre dans un instant …',
+    msgBarHint: 'Bar de bord : E / ACTION vend des pilules ou du champagne',
+    msgBarSoldOut: 'ÉPUISÉ – chaque passager a déjà été servi !',
+    msgGiantBounce: 'Trop près ! La créature géante a repoussé le sous-marin !',
+    msgBought: 'Amélioration achetée !',
+    msgNoMoney: 'Pas assez d’argent !',
+    ctrlMove: 'WASD / ZQSD / Flèches = Piloter',
+    ctrlVert: 'Espace / Maj = Monter / Descendre',
+    ctrlLight: 'F = Phare',
+    ctrlTouchMove: 'Joysticks à l’écran = Piloter et Monter / Descendre',
+    ctrlTouchLight: 'Bouton Phare = Allumer le phare',
+    resTitle: 'DÉCOMPTE DE L’EXCURSION',
+    resRating: 'Note',
+    resEarned: 'Gagné',
+    resWallet: 'Caisse',
+    resLevelNew: '🔓 Niveau 2 débloqué : Coral Reef !',
+    resLevelNew3: '🔓 Niveau 3 débloqué : Mariana Trench !',
+    resLevelOk: '🏆 Excursion au top ! Les touristes sont ravis.',
+    resLevelNo: 'À partir de 3,5 ★, une excursion est un succès – pas cette fois.',
+    shopTitle: 'BOUTIQUE D’AMÉLIORATIONS',
+    buy: 'ACHETER',
+    owned: 'ACHETÉ',
+    resContinue: 'EXCURSION SUIVANTE',
+    resMenu: 'AU MENU',
+    upGolden: 'Siège de toilettes doré chauffant',
+    upGoldenDesc: '+0,3 ★ de bonus à chaque passage aux toilettes',
+    upFog: 'Phares antibrouillard',
+    upFogDesc: 'Percent bien mieux la brume sombre des abysses',
+    upFlood: 'Méga projecteur',
+    upFloodDesc: 'Phare avant bien plus lumineux et de plus longue portée',
+    mpTitle: 'MULTIJOUEUR',
+    mpName: 'Nom du joueur',
+    mpNamePh: 'ex. CaptainMax',
+    mpHost: 'CRÉER UNE PARTIE',
+    mpHostSub: 'Vous êtes l’hôte – votre ami rejoint avec un code',
+    mpJoin: 'REJOINDRE UNE PARTIE',
+    mpJoinSub: 'Saisissez le code de l’hôte',
+    mpHostTitle: 'CRÉER UNE PARTIE',
+    mpJoinTitle: 'REJOINDRE UNE PARTIE',
+    mpRoomCode: 'CODE DU SALON',
+    mpCodeLabel: 'Code du salon à 4 chiffres',
+    mpCreating: 'Création du salon …',
+    mpWaiting: 'En attente d’un deuxième joueur …',
+    mpChooseLevel: 'NIVEAU POUR LES DEUX JOUEURS',
+    mpL2Locked: 'Le niveau 2 est encore verrouillé – terminez d’abord une excursion au niveau 1.',
+    mpL3Locked: 'Le niveau 3 est encore verrouillé – terminez d’abord une excursion au niveau 2.',
+    mpCancel: 'ANNULER',
+    mpGo: 'C’EST PARTI !',
+    mpConnecting: 'Connexion …',
+    mpGuestWait: 'Connecté ! En attente du lancement par l’hôte …',
+    mpJoined: '{name} a rejoint la partie – c’est parti !',
+    mpErrNoRoom: 'Salon introuvable. Vérifiez le code !',
+    mpErrCode: 'Veuillez saisir un code à 4 chiffres.',
+    mpErrTimeout: 'Délai dépassé – impossible de joindre l’hôte.',
+    mpErrLib: 'Impossible de charger PeerJS – vérifiez votre connexion Internet.',
+    mpErrGeneric: 'Erreur de connexion : {err}',
+    mpPeerLeft: '{name} a quitté la partie.',
+    mpYou: 'VOUS'
+  },
+
+  /* ================= NEDERLANDS ================= */
+  nl: {
+    subtitle: 'MARIANA TOURS · Diepzeetours met humor',
+    play: 'SPELEN',
+    settings: 'INSTELLINGEN',
+    resume: 'DOORGAAN',
+    singleplayer: 'ENKELSPELER',
+    multiplayer: 'MEERSPELER',
+    story: 'VERHAAL',
+    comingSoon: 'Binnenkort beschikbaar',
+    back: 'TERUG',
+    chooseLevel: 'KIES EEN LEVEL',
+    settingsTitle: 'INSTELLINGEN',
+    language: 'Taal',
+    viewDistance: 'Zichtafstand',
+    viewNear: 'kort',
+    viewFar: 'ver',
+    controls: 'BESTURING',
+    helpKb: 'PC: WASD / ZQSD / pijltjes sturen · muis slepen om rond te kijken · Spatie/Shift omhoog/omlaag · F koplamp · G grijparm · C camera · E opstaan/gaan zitten (bij de boordbar: pillen/champagne kopen, bij het boordtoilet: gaan zitten en doortrekken) · Enter actie · Esc menu',
+    helpPad: 'Gamepad: linkerstick sturen · rechterstick rondkijken · R2/L2 omhoog/omlaag · L1 licht · Y camera · X opstaan/gaan zitten · A actie (bar, toilet) · B grijparm · Start menu',
+    helpTouch: 'iPad: pijlknoppen links om te sturen · OMHOOG/OMLAAG rechts · vegen om rond te kijken · knoppen voor licht, camera, opstaan, grijparm en ACTIE (bar, boordtoilet)',
+    depth: 'DIEPTE',
+    oxygen: 'ZUURSTOF',
+    sights: 'BEZIENSWAARDIGHEDEN',
+    ratingLabel: 'TOURBEOORDELING',
+    menu: 'MENU',
+    btnUp: 'OMHOOG',
+    btnDown: 'OMLAAG',
+    btnLight: 'LICHT',
+    btnCam: 'CAMERA',
+    btnStand: 'OPSTAAN',
+    btnSit: 'GAAN ZITTEN',
+    btnArm: 'ARM',
+    btnAction: 'ACTIE',
+    level: 'Level',
+    locked: 'Vergrendeld',
+    playable: 'Speelbaar',
+    lvl1Name: 'Arctic Trench',
+    lvl1Desc: 'IJsgat, wrak, ijskathedraal en een walvis van 150 meter – een tour voor toeristen',
+    lvl2Name: 'Coral Reef',
+    lvl2Desc: 'Kleurrijke koralen, rotsboog, piratenschat, rifhaai – en kwallen die steken!',
+    lvl2LockedDesc: 'Vergrendeld – voltooi eerst een tour in level 1',
+    lvl3Name: 'Mariana Trench',
+    lvl3Desc: '11.000 m diep: gloeiende lavavelden, black smokers, een onderzoeksduikboot – en een monster!',
+    lvl3LockedDesc: 'Vergrendeld – voltooi eerst een tour in level 2',
+    lvlLockedDesc: 'Nog niet beschikbaar',
+    lockedToast: 'Dit level is nog vergrendeld.',
+    lvl2LockedToast: 'Level 2 is vergrendeld – voltooi eerst een tour in level 1!',
+    lvl3LockedToast: 'Level 3 is vergrendeld – voltooi eerst een tour in level 2!',
+    modeExt: 'BUITENCAMERA',
+    modeCockpit: 'COCKPITCAMERA',
+    modeWalk: 'IN DE DUIKBOOT',
+    objSights: 'Bezoek de bezienswaardigheden ({n}/3) – volg de pings op de radar',
+    objDock: 'Alle 3 gezien! Terug naar het platform om aan te meren – of verkoop eerst nog wat pillen …',
+    objDone: 'Tour afgerekend!',
+    msgSight_wreck: 'Bezienswaardigheid {n}/3: het gezonken scheepswrak!',
+    msgSight_cathedral: 'Bezienswaardigheid {n}/3: de gloeiende ijskristalkathedraal!',
+    msgSight_whale: 'Bezienswaardigheid {n}/3: de poolwalvis van 150 meter!',
+    msgAllSights: 'Alle 3 bezienswaardigheden gezien – terug naar het platform om aan te meren!',
+    msgStalkerDark: 'Een Vorststalker kijkt toe in het donker … zet de koplamp aan!',
+    msgStalkerScared: 'De Vorststalker is verblind door het licht en deinst terug.',
+    msgWhaleFound: 'Daar is hij – een gigantische poolwalvis! Vaar er heel dichtbij!',
+    msgSight_arch: 'Bezienswaardigheid {n}/3: door de enorme rotsboog gedoken!',
+    msgSight_treasure: 'Bezienswaardigheid {n}/3: de gezonken piratenschatkist!',
+    msgSight_shark: 'Bezienswaardigheid {n}/3: de grote rifhaai!',
+    msgSharkFound: 'Daar zwemt hij rond – een reusachtige rifhaai! Vaar er heel dichtbij!',
+    msgJelly: 'Zzzzap! Een kwal heeft de duikboot een schok gegeven!',
+    msgTreasureBonus: 'Piratenschat geborgen: +{eur} € bonus!',
+    msgLevel2Unlocked: 'Level 2 "Coral Reef" ontgrendeld!',
+    msgSight_lava: 'Bezienswaardigheid {n}/3: het gloeiende lavaveld met de reuzenschoorstenen!',
+    msgSight_subwreck: 'Bezienswaardigheid {n}/3: de gezonken onderzoeksduikboot!',
+    msgSight_monster: 'Bezienswaardigheid {n}/3: het diepzeemonster! Niet voeren, alsjeblieft …',
+    msgLavaFound: 'Voor je gloeit de zeebodem: een enorm lavaveld met torenhoge black smokers!',
+    msgSubFound: 'Twee koplampen in een rotsspleet … een gezonken onderzoeksduikboot!',
+    msgMonsterFound: 'Wat is DAT?! Een gigantische hengelaarvis met gloeiend lokaas – ga dichterbij!',
+    msgLevel3Unlocked: 'Level 3 "Mariana Trench" ontgrendeld!',
+    msgO2Low: 'De zuurstof raakt op – terug naar het platform!',
+    msgO2Charged: 'Zuurstof bijgevuld',
+    msgOxygenOut: 'Noodopstijging! De duikboot is naar het platform getrokken.',
+    msgLightOn: 'Koplamp aan',
+    msgLightOff: 'Koplamp uit',
+    msgDeepDark: 'Vanaf hier wordt het pikdonker – gebruik de koplamp!',
+    msgPills: 'Diepzeepillen verkocht: +{eur} €! De toeristen zijn … erg ontspannen.',
+    msgChampagne: 'Poolchampagne geserveerd: +{eur} €! (Het is kraanwater.)',
+    msgBarCd: 'De bar gaat zo weer open …',
+    msgBarHint: 'Boordbar: E / ACTIE verkoopt pillen of champagne',
+    msgBarSoldOut: 'UITVERKOCHT – elke passagier is al bediend!',
+    msgGiantBounce: 'Te dichtbij! Het reusachtige monster duwde de duikboot weg!',
+    msgBought: 'Upgrade gekocht!',
+    msgNoMoney: 'Niet genoeg geld!',
+    ctrlMove: 'WASD / ZQSD / Pijltjes = Sturen',
+    ctrlVert: 'Spatie / Shift = Omhoog / Omlaag',
+    ctrlLight: 'F = Koplamp',
+    ctrlTouchMove: 'Joysticks op het scherm = Sturen en Omhoog / Omlaag',
+    ctrlTouchLight: 'Lichtknop = Koplamp',
+    resTitle: 'TOURAFREKENING',
+    resRating: 'Beoordeling',
+    resEarned: 'Verdiend',
+    resWallet: 'Kas',
+    resLevelNew: '🔓 Level 2 ontgrendeld: Coral Reef!',
+    resLevelNew3: '🔓 Level 3 ontgrendeld: Mariana Trench!',
+    resLevelOk: '🏆 Toptour! De toeristen zijn laaiend enthousiast.',
+    resLevelNo: 'Vanaf 3,5 ★ telt een tour als toptour – dit keer helaas niet.',
+    shopTitle: 'UPGRADEWINKEL',
+    buy: 'KOPEN',
+    owned: 'GEKOCHT',
+    resContinue: 'VOLGENDE TOUR',
+    resMenu: 'NAAR MENU',
+    upGolden: 'Gouden verwarmde toiletbril',
+    upGoldenDesc: '+0,3 ★ bonus bij elk toiletbezoek',
+    upFog: 'Mistlampen',
+    upFogDesc: 'Dringt veel beter door de donkere diepzeemist',
+    upFlood: 'Mega-schijnwerper',
+    upFloodDesc: 'Veel helderder, verder reikende koplamp',
+    mpTitle: 'MEERSPELER',
+    mpName: 'Spelersnaam',
+    mpNamePh: 'bijv. CaptainMax',
+    mpHost: 'SPEL MAKEN',
+    mpHostSub: 'Jij bent de host – je vriend doet mee met een code',
+    mpJoin: 'SPEL JOINEN',
+    mpJoinSub: 'Voer de code van de host in',
+    mpHostTitle: 'SPEL MAKEN',
+    mpJoinTitle: 'SPEL JOINEN',
+    mpRoomCode: 'KAMERCODE',
+    mpCodeLabel: 'Kamercode van 4 cijfers',
+    mpCreating: 'Kamer wordt gemaakt …',
+    mpWaiting: 'Wachten op een tweede speler …',
+    mpChooseLevel: 'LEVEL VOOR BEIDE SPELERS',
+    mpL2Locked: 'Level 2 is nog vergrendeld – voltooi eerst een tour in level 1.',
+    mpL3Locked: 'Level 3 is nog vergrendeld – voltooi eerst een tour in level 2.',
+    mpCancel: 'ANNULEREN',
+    mpGo: 'START!',
+    mpConnecting: 'Verbinden …',
+    mpGuestWait: 'Verbonden! Wachten tot de host start …',
+    mpJoined: '{name} is erbij gekomen – daar gaan we!',
+    mpErrNoRoom: 'Kamer niet gevonden. Controleer de code!',
+    mpErrCode: 'Voer een code van 4 cijfers in.',
+    mpErrTimeout: 'Time-out – de host is niet bereikbaar.',
+    mpErrLib: 'PeerJS kon niet worden geladen – controleer je internetverbinding.',
+    mpErrGeneric: 'Verbindingsfout: {err}',
+    mpPeerLeft: '{name} heeft het spel verlaten.',
+    mpYou: 'JIJ'
+  },
+
+  /* ================= POLSKI ================= */
+  pl: {
+    subtitle: 'MARIANA TOURS · Wycieczki w głębinach z humorem',
+    play: 'GRAJ',
+    settings: 'USTAWIENIA',
+    resume: 'WZNÓW',
+    singleplayer: 'JEDEN GRACZ',
+    multiplayer: 'MULTIPLAYER',
+    story: 'FABUŁA',
+    comingSoon: 'Wkrótce',
+    back: 'WSTECZ',
+    chooseLevel: 'WYBIERZ POZIOM',
+    settingsTitle: 'USTAWIENIA',
+    language: 'Język',
+    viewDistance: 'Zasięg widzenia',
+    viewNear: 'krótki',
+    viewFar: 'daleki',
+    controls: 'STEROWANIE',
+    helpKb: 'PC: WASD / ZQSD / strzałki – sterowanie · przeciągnij myszą, by się rozejrzeć · Spacja/Shift w górę/w dół · F reflektor · G chwytak · C kamera · E wstań/usiądź (przy barze pokładowym: kup pigułki/szampana, przy toalecie pokładowej: usiądź i spuść wodę) · Enter akcja · Esc menu',
+    helpPad: 'Pad: lewy drążek – sterowanie · prawy drążek – rozglądanie · R2/L2 w górę/w dół · L1 światło · Y kamera · X wstań/usiądź · A akcja (bar, toaleta) · B chwytak · Start menu',
+    helpTouch: 'iPad: strzałki po lewej – sterowanie · GÓRA/DÓŁ po prawej · przesuń palcem, by się rozejrzeć · przyciski: światło, kamera, wstawanie, chwytak i AKCJA (bar, toaleta pokładowa)',
+    depth: 'GŁĘBOKOŚĆ',
+    oxygen: 'TLEN',
+    sights: 'ATRAKCJE',
+    ratingLabel: 'OCENA WYCIECZKI',
+    menu: 'MENU',
+    btnUp: 'GÓRA',
+    btnDown: 'DÓŁ',
+    btnLight: 'ŚWIATŁO',
+    btnCam: 'KAMERA',
+    btnStand: 'WSTAŃ',
+    btnSit: 'USIĄDŹ',
+    btnArm: 'CHWYTAK',
+    btnAction: 'AKCJA',
+    level: 'Poziom',
+    locked: 'Zablokowany',
+    playable: 'Dostępny',
+    lvl1Name: 'Arctic Trench',
+    lvl1Desc: 'Przerębel, wrak, lodowa katedra i 150-metrowy wieloryb – wycieczka dla turystów',
+    lvl2Name: 'Coral Reef',
+    lvl2Desc: 'Kolorowe koralowce, skalny łuk, skarb piratów, rekin rafowy – i meduzy, które parzą!',
+    lvl2LockedDesc: 'Zablokowany – najpierw ukończ wycieczkę na poziomie 1',
+    lvl3Name: 'Mariana Trench',
+    lvl3Desc: '11 000 m w głąb: żarzące się pola lawy, czarne kominy, łódź badawcza – i potwór!',
+    lvl3LockedDesc: 'Zablokowany – najpierw ukończ wycieczkę na poziomie 2',
+    lvlLockedDesc: 'Jeszcze niedostępny',
+    lockedToast: 'Ten poziom jest jeszcze zablokowany.',
+    lvl2LockedToast: 'Poziom 2 jest zablokowany – najpierw ukończ wycieczkę na poziomie 1!',
+    lvl3LockedToast: 'Poziom 3 jest zablokowany – najpierw ukończ wycieczkę na poziomie 2!',
+    modeExt: 'KAMERA ZEWNĘTRZNA',
+    modeCockpit: 'KAMERA W KOKPICIE',
+    modeWalk: 'WEWNĄTRZ ŁODZI',
+    objSights: 'Odwiedź atrakcje ({n}/3) – podążaj za sygnałami na radarze',
+    objDock: 'Wszystkie 3 zaliczone! Wróć na platformę, by zacumować – albo najpierw sprzedaj jeszcze trochę pigułek …',
+    objDone: 'Wycieczka rozliczona!',
+    msgSight_wreck: 'Atrakcja {n}/3: zatopiony wrak statku!',
+    msgSight_cathedral: 'Atrakcja {n}/3: świecąca katedra z kryształów lodu!',
+    msgSight_whale: 'Atrakcja {n}/3: 150-metrowy wieloryb polarny!',
+    msgAllSights: 'Wszystkie 3 atrakcje zaliczone – wróć na platformę, by zacumować!',
+    msgStalkerDark: 'Mroźny Prześladowca obserwuje cię w ciemności … włącz reflektor!',
+    msgStalkerScared: 'Mroźny Prześladowca jest oślepiony światłem i się cofa.',
+    msgWhaleFound: 'Jest – gigantyczny wieloryb polarny! Podpłyń całkiem blisko!',
+    msgSight_arch: 'Atrakcja {n}/3: przepłynięcie przez ogromny skalny łuk!',
+    msgSight_treasure: 'Atrakcja {n}/3: zatopiona skrzynia ze skarbem piratów!',
+    msgSight_shark: 'Atrakcja {n}/3: wielki rekin rafowy!',
+    msgSharkFound: 'Krąży tam – ogromny rekin rafowy! Podpłyń całkiem blisko!',
+    msgJelly: 'Bzzzt! Meduza poraziła łódź podwodną!',
+    msgTreasureBonus: 'Skarb piratów wydobyty: +{eur} € premii!',
+    msgLevel2Unlocked: 'Poziom 2 „Coral Reef” odblokowany!',
+    msgSight_lava: 'Atrakcja {n}/3: żarzące się pole lawy z gigantycznymi kominami!',
+    msgSight_subwreck: 'Atrakcja {n}/3: zatopiona łódź badawcza!',
+    msgSight_monster: 'Atrakcja {n}/3: głębinowy potwór! Prosimy nie karmić …',
+    msgLavaFound: 'Przed nami żarzy się dno: ogromne pole lawy z wysokimi jak wieże czarnymi kominami!',
+    msgSubFound: 'Dwa reflektory w szczelinie skalnej … zatopiona łódź badawcza!',
+    msgMonsterFound: 'Co to jest?! Gigantyczna żabnica ze świecącą przynętą – podpłyń bliżej!',
+    msgLevel3Unlocked: 'Poziom 3 „Mariana Trench” odblokowany!',
+    msgO2Low: 'Kończy się tlen – wracaj na platformę!',
+    msgO2Charged: 'Tlen uzupełniony',
+    msgOxygenOut: 'Awaryjne wynurzenie! Łódź została odholowana na platformę.',
+    msgLightOn: 'Reflektor włączony',
+    msgLightOff: 'Reflektor wyłączony',
+    msgDeepDark: 'Od tego miejsca robi się całkiem ciemno – użyj reflektora!',
+    msgPills: 'Sprzedano głębinowe pigułki: +{eur} €! Turyści są … bardzo zrelaksowani.',
+    msgChampagne: 'Podano arktycznego szampana: +{eur} €! (To woda z kranu.)',
+    msgBarCd: 'Bar zaraz znów się otworzy …',
+    msgBarHint: 'Bar pokładowy: E / AKCJA sprzedaje pigułki lub szampana',
+    msgBarSoldOut: 'WYPRZEDANE – każdy pasażer został już obsłużony!',
+    msgGiantBounce: 'Za blisko! Gigantyczny stwór odepchnął łódź!',
+    msgBought: 'Ulepszenie kupione!',
+    msgNoMoney: 'Za mało pieniędzy!',
+    ctrlMove: 'WASD / ZQSD / Strzałki = Sterowanie',
+    ctrlVert: 'Spacja / Shift = W górę / W dół',
+    ctrlLight: 'F = Reflektor',
+    ctrlTouchMove: 'Joysticki na ekranie = Sterowanie i W górę / W dół',
+    ctrlTouchLight: 'Przycisk światła = Reflektor',
+    resTitle: 'ROZLICZENIE WYCIECZKI',
+    resRating: 'Ocena',
+    resEarned: 'Zarobiono',
+    resWallet: 'Kasa',
+    resLevelNew: '🔓 Poziom 2 odblokowany: Coral Reef!',
+    resLevelNew3: '🔓 Poziom 3 odblokowany: Mariana Trench!',
+    resLevelOk: '🏆 Świetna wycieczka! Turyści są zachwyceni.',
+    resLevelNo: 'Od 3,5 ★ wycieczka uchodzi za świetną – tym razem niestety nie.',
+    shopTitle: 'SKLEP Z ULEPSZENIAMI',
+    buy: 'KUP',
+    owned: 'KUPIONE',
+    resContinue: 'NASTĘPNA WYCIECZKA',
+    resMenu: 'DO MENU',
+    upGolden: 'Złota podgrzewana deska klozetowa',
+    upGoldenDesc: '+0,3 ★ premii za każdą wizytę w toalecie',
+    upFog: 'Światła przeciwmgielne',
+    upFogDesc: 'Znacznie lepiej przebijają ciemną głębinową mgłę',
+    upFlood: 'Mega reflektor',
+    upFloodDesc: 'Znacznie jaśniejszy reflektor o większym zasięgu',
+    mpTitle: 'MULTIPLAYER',
+    mpName: 'Nazwa gracza',
+    mpNamePh: 'np. CaptainMax',
+    mpHost: 'STWÓRZ GRĘ',
+    mpHostSub: 'Jesteś hostem – znajomy dołącza za pomocą kodu',
+    mpJoin: 'DOŁĄCZ DO GRY',
+    mpJoinSub: 'Wpisz kod od hosta',
+    mpHostTitle: 'STWÓRZ GRĘ',
+    mpJoinTitle: 'DOŁĄCZ DO GRY',
+    mpRoomCode: 'KOD POKOJU',
+    mpCodeLabel: '4-cyfrowy kod pokoju',
+    mpCreating: 'Tworzenie pokoju …',
+    mpWaiting: 'Czekanie na drugiego gracza …',
+    mpChooseLevel: 'POZIOM DLA OBU GRACZY',
+    mpL2Locked: 'Poziom 2 jest jeszcze zablokowany – najpierw ukończ wycieczkę na poziomie 1.',
+    mpL3Locked: 'Poziom 3 jest jeszcze zablokowany – najpierw ukończ wycieczkę na poziomie 2.',
+    mpCancel: 'ANULUJ',
+    mpGo: 'START!',
+    mpConnecting: 'Łączenie …',
+    mpGuestWait: 'Połączono! Czekanie na start od hosta …',
+    mpJoined: '{name} dołączył(a) – zaczynamy!',
+    mpErrNoRoom: 'Nie znaleziono pokoju. Sprawdź kod!',
+    mpErrCode: 'Wpisz 4-cyfrowy kod.',
+    mpErrTimeout: 'Przekroczono czas – nie można połączyć się z hostem.',
+    mpErrLib: 'Nie udało się załadować PeerJS – sprawdź połączenie z internetem.',
+    mpErrGeneric: 'Błąd połączenia: {err}',
+    mpPeerLeft: '{name} opuścił(a) grę.',
+    mpYou: 'TY'
   }
 };
 
@@ -351,13 +796,17 @@ export const LEVELS = [
   { id: 5, nameKey: null, descKey: 'lvlLockedDesc', playable: false }
 ];
 
+/* Text holen: aktuelle Sprache -> Englisch -> Key selbst */
 export function t(key, vars) {
   let s = (I18N[settings.lang] && I18N[settings.lang][key]);
-  if (s === undefined) s = I18N.de[key];
+  if (s === undefined) s = I18N.en[key];
   if (s === undefined) s = key;
   if (vars) s = s.replace(/\{(\w+)\}/g, (m, k) => (vars[k] !== undefined ? vars[k] : m));
   return s;
 }
+
+/* Ist das ein bekannter Text-Key? (Englisch ist die vollständige Basis) */
+function isKey(k) { return I18N.en[k] !== undefined; }
 
 /* ---------- Interner Zustand ---------- */
 const $ = (id) => document.getElementById(id);
@@ -416,6 +865,52 @@ function levelOpen(lv) {
   return !!lv.playable && (!lv.unlock || levelUnlocked(lv.unlock));
 }
 
+/* ---------- Steuerungs-Overlay (5 Sekunden, CrazyGames) ---------- */
+let ctrlTimer = 0;
+let ctrlHideTimer = 0;
+let ctrlOn = false;
+
+function renderControlsOverlay() {
+  const box = $('ctrl-overlay');
+  if (!box) return;
+  const rows = isTouchDevice() ? ['ctrlTouchMove', 'ctrlTouchLight'] : ['ctrlMove', 'ctrlVert', 'ctrlLight'];
+  box.innerHTML = '';
+  const title = document.createElement('div');
+  title.className = 'ctrl-title';
+  title.textContent = t('controls');
+  box.appendChild(title);
+  rows.forEach((k) => {
+    const row = document.createElement('div');
+    row.className = 'ctrl-row';
+    row.textContent = t(k);
+    box.appendChild(row);
+  });
+}
+
+/* ms: Anzeigedauer (Standard 5000) – blendet danach weich aus */
+export function showControlsOverlay(ms) {
+  const box = $('ctrl-overlay');
+  if (!box) return;
+  clearTimeout(ctrlTimer);
+  clearTimeout(ctrlHideTimer);
+  ctrlOn = true;
+  renderControlsOverlay();
+  box.classList.remove('hidden');
+  void box.offsetWidth;
+  box.classList.add('show');
+  ctrlTimer = setTimeout(hideControlsOverlay, ms || 5000);
+}
+
+export function hideControlsOverlay() {
+  const box = $('ctrl-overlay');
+  clearTimeout(ctrlTimer);
+  clearTimeout(ctrlHideTimer);
+  ctrlOn = false;
+  if (!box) return;
+  box.classList.remove('show');
+  ctrlHideTimer = setTimeout(() => box.classList.add('hidden'), 1000);
+}
+
 /* ---------- Leiste oben: Live-Sterne + Geld ---------- */
 let ratingEl = null;
 let ratingActive = false;
@@ -446,9 +941,10 @@ function initRatingBar() {
 #rating-bar .pos{color:#7dffc4;background:rgba(10,60,40,.85)}
 #rating-bar .neg{color:#ff8a9c;background:rgba(70,10,20,.85)}
 #rating-bar .show{animation:rb-chip 2.2s ease forwards}
-#rating-bar.pop{animation:rb-pop .35s ease}
-@keyframes rb-pop{0%{transform:translateX(-50%) scale(1)}35%{transform:translateX(-50%) scale(1.08)}100%{transform:translateX(-50%) scale(1)}}
-@keyframes rb-chip{0%{opacity:0;margin-top:0}15%{opacity:1;margin-top:6px}75%{opacity:1;margin-top:6px}100%{opacity:0;margin-top:12px}}`;
+#rating-bar.pop{animation:rb-pop .45s ease}
+@keyframes rb-pop{0%{transform:translateX(-50%) scale(1)}40%{transform:translateX(-50%) scale(1.05)}100%{transform:translateX(-50%) scale(1)}}
+@keyframes rb-chip{0%{opacity:0;margin-top:0}15%{opacity:1;margin-top:6px}75%{opacity:1;margin-top:6px}100%{opacity:0;margin-top:12px}}
+@media (prefers-reduced-motion:reduce){#rating-bar.pop,#rating-bar .show{animation:none}#rating-bar .show{opacity:1}}`;
   document.head.appendChild(css);
 
   const bar = document.createElement('div');
@@ -507,7 +1003,7 @@ function popBar() {
   void ratingEl.offsetWidth;
   ratingEl.classList.add('pop');
   clearTimeout(ratingPopTimer);
-  ratingPopTimer = setTimeout(() => ratingEl.classList.remove('pop'), 400);
+  ratingPopTimer = setTimeout(() => ratingEl.classList.remove('pop'), 500);
 }
 
 /* info: { avg (1..5), delta (Änderung dieses Spruchs) } */
@@ -581,7 +1077,7 @@ function renderMpLevels() {
 export function setMpStatus(screen, keyOrText, vars, kind) {
   const n = $(screen === 'join' ? 'mp-join-status' : 'mp-host-status');
   if (!n) return;
-  n.textContent = (keyOrText && I18N.de[keyOrText] !== undefined) ? t(keyOrText, vars) : (keyOrText || '');
+  n.textContent = (keyOrText && isKey(keyOrText)) ? t(keyOrText, vars) : (keyOrText || '');
   n.className = 'mp-status' + (kind ? ' ' + kind : '');
 }
 
@@ -632,12 +1128,13 @@ export function applyLanguage() {
   renderLevels();
   last.objKey = null;
   last.mp = null;
+  if (ctrlOn) renderControlsOverlay();
   if (resultOpen && lastResult) renderResult(lastResult);
   if (cb.onLanguageChange) cb.onLanguageChange(settings.lang);
 }
 
 export function setLanguage(lang) {
-  if (lang !== 'de' && lang !== 'en') return;
+  if (LANGS.indexOf(lang) === -1) return;
   settings.lang = lang;
   saveSettings();
   applyLanguage();
@@ -717,6 +1214,7 @@ export function showMenu(opts) {
   inGame = !!opts.inGame;
   menuOpen = true;
   stack = ['main'];
+  hideControlsOverlay();
   $('menu').classList.remove('hidden');
   $('btn-resume').classList.toggle('hidden', !inGame);
   renderLevels();
@@ -766,7 +1264,7 @@ export function setSightIcons(icons) {
 }
 
 export function showMessage(keyOrText, vars, ms) {
-  const text = (I18N.de[keyOrText] !== undefined) ? t(keyOrText, vars) : keyOrText;
+  const text = isKey(keyOrText) ? t(keyOrText, vars) : keyOrText;
   el.message.textContent = text;
   el.message.classList.add('show');
   clearTimeout(msgTimer);
@@ -780,10 +1278,11 @@ export function setMode(key) {
   modeTimer = setTimeout(() => el.mode.classList.remove('show'), 2600);
 }
 
+/* Sanfter Treffer-Schimmer (kein hartes Blitzen) */
 export function flash() {
   el.flash.classList.add('show');
   clearTimeout(flashTimer);
-  flashTimer = setTimeout(() => el.flash.classList.remove('show'), 140);
+  flashTimer = setTimeout(() => el.flash.classList.remove('show'), 220);
 }
 
 /* Rausch-Timer (Tiefsee-Pillen): sekunden = Restzeit, null = ausblenden */
@@ -902,6 +1401,7 @@ function showResultToast(text) {
 export function showResult(state) {
   lastResult = Object.assign({}, state);
   resultOpen = true;
+  hideControlsOverlay();
   renderResult(lastResult);
   $('result').classList.remove('hidden');
   syncRatingBar();
