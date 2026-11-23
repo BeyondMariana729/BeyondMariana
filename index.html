@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
@@ -11,13 +11,19 @@
  --ink:#d9f7ff;--ok:#5dffb0;--red:#ff5468;
  --mono:ui-monospace,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
 }
-*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;
+ -webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 html,body{margin:0;height:100%;background:#03080b;color:var(--ink);overflow:hidden;
- font-family:"Avenir Next","Segoe UI",system-ui,sans-serif;-webkit-user-select:none;user-select:none}
+ font-family:"Avenir Next","Segoe UI",system-ui,sans-serif;-webkit-user-select:none;user-select:none;
+ -webkit-text-size-adjust:100%}
 input{-webkit-user-select:text;user-select:text}
+::selection{background:transparent}
 #game{position:fixed;inset:0;z-index:0}
 .hidden{display:none !important}
-button{font-family:inherit;cursor:pointer}
+button{font-family:inherit;cursor:pointer;touch-action:manipulation}
+
+/* CrazyGames bringt einen eigenen Fullscreen-Button mit – eigene Varianten bleiben versteckt */
+#btn-fullscreen,#fullscreen-btn,.fullscreen-btn,.btn-fullscreen,[data-act="fullscreen"]{display:none !important}
 
 /* ---------- Cockpit-Bauteil: Metallplatte mit abgeschrägten Ecken ---------- */
 .cut{--c:14px;--e:2px;position:relative;isolation:isolate;background:var(--edge,var(--cy-dim));
@@ -89,6 +95,10 @@ button{font-family:inherit;cursor:pointer}
 .seg.on{--edge:var(--am);--fill:linear-gradient(180deg,#3b2a0f,#1d1407);color:var(--am)}
 .seg:hover,.seg:focus{outline:none;--edge:var(--am)}
 
+/* 5 Sprachen: umbrechen statt quetschen */
+.lang-row{flex-wrap:wrap}
+.lang-row .seg{flex:1 1 30%;padding:12px 6px;font-size:13px;letter-spacing:.08em}
+
 /* ---------- Eingabefelder ---------- */
 .inp{--c:10px;--e:1px;--edge:var(--cy-dim);--fill:#04090c}
 .inp:focus-within{--edge:var(--am)}
@@ -104,7 +114,7 @@ button{font-family:inherit;cursor:pointer}
  color:var(--am);text-shadow:0 0 18px rgba(255,176,46,.55)}
 .mp-status{min-height:22px;font:700 13px var(--mono);letter-spacing:.08em;color:var(--ink);opacity:.9;text-align:center}
 .mp-status.wait{color:var(--am)}
-.mp-status.wait::before{content:"◉ ";animation:blink 1s infinite}
+.mp-status.wait::before{content:"◉ ";animation:pulse 2s ease-in-out infinite}
 .mp-status.ok{color:var(--ok)}
 .mp-status.err{color:var(--red)}
 #mp-level-hint{min-height:18px;font:700 12px var(--mono);letter-spacing:.1em;color:var(--ink);opacity:.8;text-align:center}
@@ -148,8 +158,10 @@ button{font-family:inherit;cursor:pointer}
 #hud-left .depth small{font-size:14px;color:var(--am);margin-left:3px}
 .bar{height:9px;background:rgba(255,255,255,.14);overflow:hidden;margin-top:5px}
 .bar i{display:block;height:100%;width:100%;background:linear-gradient(90deg,#14a9bd,var(--cy));transition:width .3s}
-.bar i.low{background:linear-gradient(90deg,#ff3a5a,#ff8a9c);animation:blink .8s infinite}
-@keyframes blink{50%{opacity:.45}}
+.bar i.low{background:linear-gradient(90deg,#ff3a5a,#ff8a9c);animation:pulse 2s ease-in-out infinite}
+/* sanftes Pulsieren statt hartem Blinken (max. 0,5 Hz, nur leichte Helligkeitsänderung) */
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.7}}
+@media (prefers-reduced-motion:reduce){.bar i.low,#hud-high,.mp-status.wait::before{animation:none}}
 #hud-o2-text{font:800 12px var(--mono);margin-top:3px;opacity:.9}
 #hud-sights{right:calc(12px + env(safe-area-inset-right,0px));top:calc(62px + env(safe-area-inset-top,0px));text-align:center}
 #hud-sights .icons{display:flex;gap:8px;margin-top:4px;justify-content:center}
@@ -172,9 +184,21 @@ button{font-family:inherit;cursor:pointer}
 #hud-mode.show{opacity:.95}
 #hud-high{position:absolute;left:50%;top:calc(52px + env(safe-area-inset-top,0px));transform:translateX(-50%);
  padding:4px 12px;border-radius:999px;background:linear-gradient(90deg,#ff4fd8,#7a5cff,#4fe8ff);font-weight:900;font-size:14px;
- animation:blink 1.2s infinite}
-#hud-flash{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:30;transition:opacity .12s}
-#hud-flash.show{opacity:.55}
+ animation:pulse 2.4s ease-in-out infinite}
+/* Treffer-Schimmer: weich ein- und ausgeblendet, niedrige Deckkraft (kein Bildschirm-Geflacker) */
+#hud-flash{position:fixed;inset:0;background:#bfe9ff;opacity:0;pointer-events:none;z-index:30;transition:opacity .45s ease-out}
+#hud-flash.show{opacity:.16;transition:opacity .08s ease-in}
+@media (prefers-reduced-motion:reduce){#hud-flash.show{opacity:.06}}
+
+/* ---------- Steuerungs-Overlay (5 Sekunden beim ersten Start) ---------- */
+#ctrl-overlay{position:fixed;left:50%;top:calc(132px + env(safe-area-inset-top,0px));transform:translateX(-50%);
+ z-index:47;pointer-events:none;padding:10px 20px 12px;text-align:center;
+ background:rgba(6,12,16,.55);border:1px solid var(--cy-dim);border-top:2px solid var(--am);
+ backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);
+ max-width:min(520px,90vw);opacity:0;transition:opacity .9s ease}
+#ctrl-overlay.show{opacity:.92}
+#ctrl-overlay .ctrl-title{font:800 10px var(--mono);letter-spacing:.3em;color:var(--cy);opacity:.85;margin-bottom:5px}
+#ctrl-overlay .ctrl-row{font:700 13px/1.7 var(--mono);color:var(--ink);letter-spacing:.04em}
 
 /* ---------- Touch-Steuerung ---------- */
 #touch{position:fixed;inset:0;z-index:40;pointer-events:none}
@@ -237,8 +261,11 @@ button{font-family:inherit;cursor:pointer}
  .actions{right:calc(96px + env(safe-area-inset-right,0px));max-width:150px}
  #hud-left{min-width:120px}#hud-left .depth{font-size:24px}
  #mp-bar{top:calc(124px + env(safe-area-inset-top,0px));min-width:120px;font-size:12px}
+ #ctrl-overlay{top:calc(118px + env(safe-area-inset-top,0px))}
+ #ctrl-overlay .ctrl-row{font-size:12px}
  .btn{font-size:14px;letter-spacing:.12em}
  .seg{font-size:12px;letter-spacing:.08em;padding:12px 6px}
+ .lang-row .seg{flex:1 1 44%}
 }
 </style>
 </head>
@@ -247,21 +274,21 @@ button{font-family:inherit;cursor:pointer}
 <!-- 3D-Spiel (Canvas wird von script.js eingefügt) -->
 <div id="game"></div>
 
-<!-- Treffer-Blitz -->
+<!-- Treffer-Schimmer (weich, kein hartes Blitzen) -->
 <div id="hud-flash"></div>
 
 <!-- HUD -->
 <div id="hud" class="hidden">
   <div id="hud-left" class="hud-card">
-    <div class="lbl" data-i18n="depth">TIEFE</div>
+    <div class="lbl" data-i18n="depth">DEPTH</div>
     <div class="depth"><span id="hud-depth">0</span><small>m</small></div>
-    <div class="lbl" style="margin-top:6px" data-i18n="oxygen">SAUERSTOFF</div>
+    <div class="lbl" style="margin-top:6px" data-i18n="oxygen">OXYGEN</div>
     <div class="bar"><i id="hud-o2"></i></div>
     <div id="hud-o2-text">100%</div>
   </div>
 
   <div id="hud-sights" class="hud-card">
-    <div class="lbl" data-i18n="sights">SEHENSWÜRDIGKEITEN</div>
+    <div class="lbl" data-i18n="sights">SIGHTSEEING</div>
     <div class="icons">
       <span class="sight" id="sight-0">🚢</span>
       <span class="sight" id="sight-1">💎</span>
@@ -276,13 +303,16 @@ button{font-family:inherit;cursor:pointer}
   <div id="hud-objective"></div>
 </div>
 
+<!-- Steuerungs-Overlay: erscheint 5 Sekunden beim Start des ersten Levels (Inhalt kommt aus ui.js) -->
+<div id="ctrl-overlay" class="hidden"></div>
+
 <!-- Multiplayer-Leiste: DU: x € | Freund: y € -->
 <div id="mp-bar" class="hidden">
-  <span id="mp-me">DU: 0 €</span>
-  <span id="mp-friend">Mitspieler: 0 €</span>
+  <span id="mp-me">YOU: 0 €</span>
+  <span id="mp-friend">Player: 0 €</span>
 </div>
 
-<button id="btn-menu" type="button" style="display:none" data-i18n="menu">MENÜ</button>
+<button id="btn-menu" type="button" style="display:none" data-i18n="menu">MENU</button>
 
 <!-- Touch-Buttons (iPad) -->
 <div id="touch" class="hidden">
@@ -293,15 +323,15 @@ button{font-family:inherit;cursor:pointer}
     <button class="tbtn" data-hold="back" type="button">▼</button>
   </div>
   <div class="actions">
-    <button class="tbtn" data-act="light" type="button"><span>💡</span><em data-i18n="btnLight">LICHT</em></button>
-    <button class="tbtn" data-act="cam" type="button"><span>🎥</span><em data-i18n="btnCam">KAMERA</em></button>
-    <button class="tbtn" data-act="stand" type="button"><span>🧍</span><em data-i18n="btnStand">AUFSTEHEN</em></button>
+    <button class="tbtn" data-act="light" type="button"><span>💡</span><em data-i18n="btnLight">LIGHT</em></button>
+    <button class="tbtn" data-act="cam" type="button"><span>🎥</span><em data-i18n="btnCam">CAMERA</em></button>
+    <button class="tbtn" data-act="stand" type="button"><span>🧍</span><em data-i18n="btnStand">STAND UP</em></button>
     <button class="tbtn" data-act="arm" type="button"><span>🦾</span><em data-i18n="btnArm">ARM</em></button>
-    <button class="tbtn" data-act="action" type="button"><span>✋</span><em data-i18n="btnAction">AKTION</em></button>
+    <button class="tbtn" data-act="action" type="button"><span>✋</span><em data-i18n="btnAction">ACTION</em></button>
   </div>
   <div class="vert">
-    <button class="tbtn" data-hold="up" type="button"><span>⬆</span><em data-i18n="btnUp">AUF</em></button>
-    <button class="tbtn" data-hold="down" type="button"><span>⬇</span><em data-i18n="btnDown">AB</em></button>
+    <button class="tbtn" data-hold="up" type="button"><span>⬆</span><em data-i18n="btnUp">UP</em></button>
+    <button class="tbtn" data-hold="down" type="button"><span>⬇</span><em data-i18n="btnDown">DOWN</em></button>
   </div>
 </div>
 
@@ -309,16 +339,16 @@ button{font-family:inherit;cursor:pointer}
 <div id="result" class="hidden">
   <div class="panel">
     <div id="res-toast"></div>
-    <h2 data-i18n="resTitle">TOUR-ABRECHNUNG</h2>
+    <h2 data-i18n="resTitle">TOUR SETTLEMENT</h2>
     <div class="res-stars"><span class="starbar" id="res-stars">★★★★★</span><b id="res-num">4.0</b></div>
-    <div class="res-line"><span data-i18n="resEarned">Verdient</span><b id="res-earned">+0 €</b></div>
-    <div class="res-line"><span data-i18n="resWallet">Kasse</span><b id="res-wallet">0 €</b></div>
+    <div class="res-line"><span data-i18n="resEarned">Earned</span><b id="res-earned">+0 €</b></div>
+    <div class="res-line"><span data-i18n="resWallet">Cash</span><b id="res-wallet">0 €</b></div>
     <div id="res-level" class="res-level"></div>
-    <h3 data-i18n="shopTitle">UPGRADE-SHOP</h3>
+    <h3 data-i18n="shopTitle">UPGRADE SHOP</h3>
     <div id="shop-list"></div>
     <div class="actions2">
-      <button id="result-continue" class="btn cut primary" type="button" data-i18n="resContinue">NÄCHSTE TOUR</button>
-      <button id="result-menu" class="btn cut" type="button" data-i18n="resMenu">ZUM MENÜ</button>
+      <button id="result-continue" class="btn cut primary" type="button" data-i18n="resContinue">NEXT TOUR</button>
+      <button id="result-menu" class="btn cut" type="button" data-i18n="resMenu">TO MENU</button>
     </div>
   </div>
 </div>
@@ -332,9 +362,9 @@ button{font-family:inherit;cursor:pointer}
 
     <!-- Hauptmenü -->
     <div class="screen active" id="screen-main">
-      <button id="btn-resume" class="btn cut primary hidden" type="button" data-i18n="resume">WEITER</button>
+      <button id="btn-resume" class="btn cut primary hidden" type="button" data-i18n="resume">RESUME</button>
       <button class="btn cut" type="button" data-go="play" data-i18n="play">PLAY</button>
-           <button id="btn-shop" class="btn cut" type="button">SHOP</button>
+      <button id="btn-shop" class="btn cut" type="button">SHOP</button>
       <button class="btn cut" type="button" data-go="settings" data-i18n="settings">SETTINGS</button>
     </div>
 
@@ -343,42 +373,42 @@ button{font-family:inherit;cursor:pointer}
       <button class="btn cut" type="button" data-go="levels" data-i18n="singleplayer">SINGLEPLAYER</button>
       <button class="btn cut" type="button" data-go="multiplayer" data-i18n="multiplayer">MULTIPLAYER</button>
       <button class="btn cut disabled" type="button" disabled><span data-i18n="story">STORY</span><small data-i18n="comingSoon">Coming Soon</small></button>
-      <button class="btn cut" type="button" data-back data-i18n="back">ZURÜCK</button>
+      <button class="btn cut" type="button" data-back data-i18n="back">BACK</button>
     </div>
 
     <!-- Level-Auswahl (Singleplayer): Karten werden von ui.js erzeugt (Level 1–3 spielbar) -->
     <div class="screen" id="screen-levels">
-      <h2 data-i18n="chooseLevel">LEVEL WÄHLEN</h2>
+      <h2 data-i18n="chooseLevel">CHOOSE LEVEL</h2>
       <div id="level-list" style="display:flex;flex-direction:column;gap:10px"></div>
-      <button class="btn cut" type="button" data-back data-i18n="back">ZURÜCK</button>
+      <button class="btn cut" type="button" data-back data-i18n="back">BACK</button>
     </div>
 
     <!-- MULTIPLAYER-Menü -->
     <div class="screen" id="screen-multiplayer">
       <h2 data-i18n="mpTitle">MULTIPLAYER</h2>
       <div class="field">
-        <label class="lbl2" for="mp-name" data-i18n="mpName">Spielername</label>
+        <label class="lbl2" for="mp-name" data-i18n="mpName">Player name</label>
         <div class="inp cut">
-          <input id="mp-name" type="text" maxlength="14" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-i18n-ph="mpNamePh" placeholder="z. B. CaptainMax">
+          <input id="mp-name" type="text" maxlength="14" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-i18n-ph="mpNamePh" placeholder="e.g. CaptainMax">
         </div>
       </div>
       <button id="btn-mp-host" class="btn cut big primary" type="button">
-        <span data-i18n="mpHost">SPIEL ERSTELLEN</span>
-        <small data-i18n="mpHostSub">Du bist der Host – dein Freund tritt per Code bei</small>
+        <span data-i18n="mpHost">CREATE GAME</span>
+        <small data-i18n="mpHostSub">You are the host – your friend joins with a code</small>
       </button>
       <button id="btn-mp-join" class="btn cut big" type="button">
-        <span data-i18n="mpJoin">SPIEL BEITRETEN</span>
-        <small data-i18n="mpJoinSub">Code vom Host eingeben</small>
+        <span data-i18n="mpJoin">JOIN GAME</span>
+        <small data-i18n="mpJoinSub">Enter the code from the host</small>
       </button>
-      <button class="btn cut" type="button" data-back data-i18n="back">ZURÜCK</button>
+      <button class="btn cut" type="button" data-back data-i18n="back">BACK</button>
     </div>
 
     <!-- MULTIPLAYER: Spiel erstellen (Host) -->
     <div class="screen" id="screen-mphost">
-      <h2 data-i18n="mpHostTitle">SPIEL ERSTELLEN</h2>
-      <div class="lbl2" data-i18n="mpRoomCode">RAUM-CODE</div>
+      <h2 data-i18n="mpHostTitle">CREATE GAME</h2>
+      <div class="lbl2" data-i18n="mpRoomCode">ROOM CODE</div>
       <div id="mp-code" class="lcd cut">····</div>
-      <div class="lbl2" data-i18n="mpChooseLevel">LEVEL FÜR BEIDE SPIELER</div>
+      <div class="lbl2" data-i18n="mpChooseLevel">LEVEL FOR BOTH PLAYERS</div>
       <div class="seg-row">
         <button class="seg cut on" type="button" data-mplevel="1">LEVEL 1</button>
         <button class="seg cut" type="button" data-mplevel="2">LEVEL 2</button>
@@ -386,41 +416,44 @@ button{font-family:inherit;cursor:pointer}
       </div>
       <div id="mp-level-hint"></div>
       <div id="mp-host-status" class="mp-status"></div>
-      <button class="btn cut" type="button" data-back data-i18n="mpCancel">ABBRECHEN</button>
+      <button class="btn cut" type="button" data-back data-i18n="mpCancel">CANCEL</button>
     </div>
 
     <!-- MULTIPLAYER: Spiel beitreten (Gast) -->
     <div class="screen" id="screen-mpjoin">
-      <h2 data-i18n="mpJoinTitle">SPIEL BEITRETEN</h2>
-      <div class="lbl2" data-i18n="mpCodeLabel">4-stelliger Raum-Code</div>
+      <h2 data-i18n="mpJoinTitle">JOIN GAME</h2>
+      <div class="lbl2" data-i18n="mpCodeLabel">4-digit room code</div>
       <div class="inp code cut">
         <input id="mp-join-code" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="0000">
       </div>
-      <button id="btn-mp-go" class="btn cut big primary" type="button"><span class="go" data-i18n="mpGo">LOS!</span></button>
+      <button id="btn-mp-go" class="btn cut big primary" type="button"><span class="go" data-i18n="mpGo">GO!</span></button>
       <div id="mp-join-status" class="mp-status"></div>
-      <button class="btn cut" type="button" data-back data-i18n="mpCancel">ABBRECHEN</button>
+      <button class="btn cut" type="button" data-back data-i18n="mpCancel">CANCEL</button>
     </div>
 
     <!-- SETTINGS -->
     <div class="screen" id="screen-settings">
-      <h2 data-i18n="settingsTitle">EINSTELLUNGEN</h2>
+      <h2 data-i18n="settingsTitle">SETTINGS</h2>
       <div class="setrow">
-        <label><span data-i18n="language">Sprache</span></label>
-        <div class="seg-row">
-          <button class="seg cut" type="button" data-lang="de">DEUTSCH</button>
+        <label><span data-i18n="language">Language</span></label>
+        <div class="seg-row lang-row">
           <button class="seg cut" type="button" data-lang="en">ENGLISH</button>
+          <button class="seg cut" type="button" data-lang="de">DEUTSCH</button>
+          <button class="seg cut" type="button" data-lang="fr">FRANÇAIS</button>
+          <button class="seg cut" type="button" data-lang="nl">NEDERLANDS</button>
+          <button class="seg cut" type="button" data-lang="pl">POLSKI</button>
         </div>
       </div>
       <div class="setrow">
-        <label><span data-i18n="viewDistance">Sichtweite</span><span id="set-view-val">100%</span></label>
+        <label><span data-i18n="viewDistance">View distance</span><span id="set-view-val">100%</span></label>
         <input id="set-view" type="range" min="0.6" max="1.6" step="0.1" value="1">
-        <div class="range-ends"><span data-i18n="viewNear">kurz</span><span data-i18n="viewFar">weit</span></div>
+        <div class="range-ends"><span data-i18n="viewNear">short</span><span data-i18n="viewFar">far</span></div>
       </div>
-      <h2 style="margin-top:6px" data-i18n="controls">STEUERUNG</h2>
+      <h2 style="margin-top:6px" data-i18n="controls">CONTROLS</h2>
       <p class="help" data-i18n="helpKb"></p>
       <p class="help" data-i18n="helpPad"></p>
       <p class="help" data-i18n="helpTouch"></p>
-      <button class="btn cut" type="button" data-back data-i18n="back">ZURÜCK</button>
+      <button class="btn cut" type="button" data-back data-i18n="back">BACK</button>
     </div>
   </div>
 </div>
