@@ -802,7 +802,8 @@ function disposeLevel() {
     tourists = null;
   }
   mp.detachGhost();               // U-Boot + Namensschild des Mitspielers entfernen (Verbindung bleibt)
-  if (sub) { sub.dispose(); sub = null; }
+    Shop.detachFx();
+   if (sub) { sub.dispose(); sub = null; }
   if (level) { try { level.dispose(); } catch (err) { console.error(err); } level = null; }
   purgeScene(scene);
   scene = null;
@@ -890,7 +891,7 @@ function buildGame() {
     UI.setRatingActive(false);
     UI.showMessage(T('tourError') + (err && err.message ? err.message : err), null, 9000);
   }
-
+  applyShopSkins();
   // Multiplayer: U-Boot des Mitspielers in die Szene setzen
   if (mp.connected) {
     try { mp.attachGhost(scene, currentLevelId); } catch (err) { console.error('[Multiplayer] Ghost:', err); }
