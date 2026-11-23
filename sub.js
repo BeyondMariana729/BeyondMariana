@@ -1445,9 +1445,10 @@
         Öffentliche Schnittstelle
         ========================================================== */
      return {
-       group,
+              group,
        cabin,
        captain,
+       materials: M,
        SUB,
        update,
    
