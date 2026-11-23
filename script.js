@@ -47,6 +47,7 @@ import { buildLevel3, WORLD3 } from './level3.js';
 import { createTourists } from './tourists.js';
 import { createMultiplayer } from './multiplayer.js';
 import * as UI from './ui.js';
+import * as Shop from './shop.js';
 
 /* ------------------------------------------------------------
    Kleine Helfer
@@ -161,6 +162,21 @@ try {
 function saveGame() {
   try { localStorage.setItem(SAVE_KEY, JSON.stringify({ money, owned })); } catch (e) { /* ignorieren */ }
 }
+
+function spendMoney(amount) {
+  if (money < amount) return false;
+  money -= amount;
+  saveGame();
+  UI.updateMoney(money, -amount);
+  return true;
+}
+
+function applyShopSkins() {
+  if (!sub) return;
+  try { Shop.applyEquipped({ sub, tourists }); } catch (err) { console.error('[Shop]', err); }
+}
+
+
 
 /* ------------------------------------------------------------
    Level-2/3-Freischaltung (dauerhaft in localStorage)
