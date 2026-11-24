@@ -30,6 +30,17 @@
        Enter = Aktion (E im Laufmodus), 5-Sekunden-Steuerungs-Overlay
      - kein hartes Flackern: Kamera-Wackeln weich (Sinus statt Zufall)
 
+   NEU (CrazyGames SDK v3) – STRIKT NUR AUF CRAZYGAMES:
+     - isCrazyGamesEnv ist nur dann true, wenn das Spiel wirklich auf CrazyGames läuft
+       (Hostname / Ancestor-Origin / Referrer enthält "crazygames", window.CrazyGames.SDK
+       vorhanden, SDK.init() erfolgreich und SDK.environment !== 'disabled').
+       Auf beyondmarianaa.pages.dev oder lokal bleibt es false: keine SDK-Events,
+       keine Werbung, kein Ad-Button, keine Konsolenfehler.
+     - loadingStart/loadingStop beim Laden, gameplayStart/gameplayStop bei Level-Start,
+       Fortsetzen, Menü und Tour-Abrechnung
+     - Midgame-Ad nach der Tour-Abrechnung (NEXT TOUR / TO MENU), Ton währenddessen aus
+     - Rewarded-Ad "Watch Ad: +500 €" im Ergebnis-Screen (Button nur auf CrazyGames sichtbar)
+
    Multiplayer:
      Host erstellt einen Raum (4-stelliger Code), Gast tritt bei, beide starten
      gleichzeitig dasselbe Level (gleicher Zufalls-Seed beim Level-Aufbau).
@@ -197,6 +208,10 @@ const RUMBLE_TIME = 0.7;         // weiches Kamera-Rütteln nach dem Rückstoß
 const MP_SEND_INTERVAL = 1 / 15; // Multiplayer: 15 Zustands-Pakete pro Sekunde
 const MP_SPAWN_OFFSET = 8;       // Gast startet 8 m neben dem Host
 
+/* CrazyGames: Belohnung für die Rewarded-Werbung */
+const REWARD_AD_EUR = 500;
+const AD_GUARD_MS = 120000;      // Sicherheits-Timeout, falls ein Ad-Callback nie kommt
+
 /* Level-2/3-Sehenswürdigkeiten -> Reaktionen, die tourists.js schon kennt */
 const TOUR_KIND = {
   arch: 'cathedral', treasure: 'wreck', shark: 'whale',        // Level 2
@@ -273,9 +288,13 @@ function unlockLevel3() {
 
 /* ------------------------------------------------------------
    Audio (iPad): ein gemeinsamer AudioContext (window.__MARIANA_AC)
+   Während einer Werbung (CrazyGames) wird der Ton stummgeschaltet.
    ------------------------------------------------------------ */
 let audioPrimed = false;
+let audioMuted = false;
+
 function unlockAudio() {
+  if (audioMuted) return;         // während einer Werbung bleibt der Ton aus
   try {
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!window.__MARIANA_AC && AC) window.__MARIANA_AC = new AC();
@@ -298,6 +317,172 @@ function unlockAudio() {
 ['pointerdown', 'touchstart', 'touchend', 'keydown', 'click'].forEach((n) => {
   window.addEventListener(n, unlockAudio, { capture: true, passive: true });
 });
+
+/* Spiel-Ton kurz aus-/einschalten (nur für Werbung) */
+function setGameMuted(m) {
+  audioMuted = !!m;
+  try {
+    const ctx = window.__MARIANA_AC;
+    if (!ctx) return;
+    let p = null;
+    if (audioMuted) { if (ctx.state === 'running') p = ctx.suspend(); }
+    else if (ctx.state !== 'running') p = ctx.resume();
+    if (p && p.catch) p.catch(() => {});
+  } catch (e) { /* egal */ }
+}
+
+/* ------------------------------------------------------------
+   CrazyGames SDK v3 – NUR aktiv, wenn das Spiel wirklich auf CrazyGames läuft.
+   Auf beyondmarianaa.pages.dev / lokal: isCrazyGamesEnv bleibt false -> keine SDK-Events,
+   keine Werbung, kein Ad-Button, keine Konsolenfehler.
+   ------------------------------------------------------------ */
+let isCrazyGamesEnv = false;
+let cgSdk = null;
+let cgLoading = false;
+let cgPlaying = false;
+let adBusy = false;
+
+const OWN_HOST_RE = /(^|\.)beyondmarianaa\.pages\.dev$/i;
+
+function hostHasCrazyGames(s) {
+  return String(s || '').toLowerCase().indexOf('crazygames') !== -1;
+}
+
+/* Läuft die Seite auf crazygames.com bzw. in einem CrazyGames-Iframe? */
+function cgLooksLikeCrazyGames() {
+  try {
+    const host = (location.hostname || '').toLowerCase();
+    if (OWN_HOST_RE.test(host)) return false;            // eigene Website: nie
+    if (hostHasCrazyGames(host)) return true;
+    const ao = location.ancestorOrigins;
+    if (ao) {
+      for (let i = 0; i < ao.length; i++) { if (hostHasCrazyGames(ao[i])) return true; }
+    }
+    const ref = document.referrer || '';
+    if (ref) {
+      let rh = ref;
+      try { rh = new URL(ref).hostname; } catch (e) { /* ref direkt prüfen */ }
+      if (hostHasCrazyGames(rh)) return true;
+    }
+  } catch (e) { /* egal */ }
+  return false;
+}
+
+/* SDK-Aufruf, der niemals eine Konsolen-Ausnahme wirft */
+function cgSafe(fn) {
+  if (!isCrazyGamesEnv || !cgSdk) return;
+  try {
+    const r = fn(cgSdk);
+    if (r && typeof r.catch === 'function') r.catch(() => {});
+  } catch (e) { /* still */ }
+}
+
+function cgLoadingStart() {
+  if (!isCrazyGamesEnv || cgLoading) return;
+  cgLoading = true;
+  cgSafe((s) => s.game.loadingStart());
+}
+function cgLoadingStop() {
+  if (!isCrazyGamesEnv || !cgLoading) return;
+  cgLoading = false;
+  cgSafe((s) => s.game.loadingStop());
+}
+function cgGameplayStart() {
+  if (!isCrazyGamesEnv || cgPlaying) return;
+  cgPlaying = true;
+  cgSafe((s) => s.game.gameplayStart());
+}
+function cgGameplayStop() {
+  if (!isCrazyGamesEnv || !cgPlaying) return;
+  cgPlaying = false;
+  cgSafe((s) => s.game.gameplayStop());
+}
+
+/* Erkennung + Initialisierung (still: bei jedem Problem einfach "nicht CrazyGames") */
+const cgReady = (async () => {
+  try {
+    if (!cgLooksLikeCrazyGames()) return false;
+    const sdk = window.CrazyGames && window.CrazyGames.SDK;
+    if (!sdk) return false;
+    await sdk.init();
+    if (!sdk.environment || sdk.environment === 'disabled') return false;
+    cgSdk = sdk;
+    isCrazyGamesEnv = true;
+    return true;
+  } catch (e) {
+    cgSdk = null;
+    isCrazyGamesEnv = false;
+    return false;
+  }
+})().then((ok) => {
+  if (ok) {
+    cgLoadingStart();
+    UI.setAdsEnabled(true);     // Rewarded-Button wird NUR hier sichtbar
+  }
+  return ok;
+});
+
+/* Midgame-Werbung (nur auf CrazyGames). done() wird immer genau einmal aufgerufen. */
+function runMidgameAd(done) {
+  if (adBusy) return;
+  if (!isCrazyGamesEnv || !cgSdk) { done(); return; }
+  adBusy = true;
+  let over = false;
+  let guard = 0;
+  const finish = () => {
+    if (over) return;
+    over = true;
+    clearTimeout(guard);
+    adBusy = false;
+    setGameMuted(false);
+    done();
+  };
+  guard = setTimeout(finish, AD_GUARD_MS);
+  try {
+    cgSdk.ad.requestAd('midgame', {
+      adStarted: () => { setGameMuted(true); },
+      adFinished: finish,
+      adError: finish
+    });
+  } catch (e) {
+    finish();
+  }
+}
+
+/* Rewarded-Werbung: +500 € bei Erfolg (nur auf CrazyGames) */
+function watchRewardedAd() {
+  if (!isCrazyGamesEnv || !cgSdk || adBusy) return;
+  adBusy = true;
+  UI.setRewardedBusy(true);
+  let over = false;
+  let guard = 0;
+  const end = (granted) => {
+    if (over) return;
+    over = true;
+    clearTimeout(guard);
+    adBusy = false;
+    setGameMuted(false);
+    UI.setRewardedBusy(false);
+    if (granted) {
+      money += REWARD_AD_EUR;
+      saveGame();
+      UI.updateMoney(money, REWARD_AD_EUR);
+      UI.refreshResult({ money, owned: Object.assign({}, owned), rewarded: true });
+    } else {
+      UI.showResultMessage('adNoAd');
+    }
+  };
+  guard = setTimeout(() => end(false), AD_GUARD_MS);
+  try {
+    cgSdk.ad.requestAd('rewarded', {
+      adStarted: () => { setGameMuted(true); },
+      adFinished: () => end(true),
+      adError: () => end(false)
+    });
+  } catch (e) {
+    end(false);
+  }
+}
 
 // Untertitel-Box der Touristen immer über dem HUD
 (function injectSubtitleStyle() {
@@ -861,6 +1046,7 @@ function interact() {
 }
 
 function openMenu() {
+  cgGameplayStop();                 // CrazyGames: Menü offen = kein Gameplay
   releaseInputs();
   document.body.style.touchAction = '';
   UI.showMenu({ inGame: true });
@@ -889,6 +1075,7 @@ function purgeScene(sc) {
 
 function disposeLevel() {
   running = false;
+  cgGameplayStop();
   onToilet = false;
   giantRefs = [];
   UI.setRatingActive(false);
@@ -1102,6 +1289,10 @@ function buildGame() {
   UI.setMode('modeExt');
   lastT = performance.now();
 
+  // CrazyGames: 3D-Welt ist bereit -> Laden beendet, Gameplay beginnt
+  cgLoadingStop();
+  cgGameplayStart();
+
   // 5-Sekunden-Steuerungs-Overlay beim ersten Level-Start
   if (!controlsHintShown) {
     controlsHintShown = true;
@@ -1111,6 +1302,8 @@ function buildGame() {
 
 function startLevel() {
   unlockAudio();
+  cgGameplayStop();
+  cgLoadingStart();
   UI.setHUDVisible(true);
   UI.setTouchVisible(UI.isTouchDevice());
   if (btnMenu) btnMenu.style.display = '';
@@ -1122,6 +1315,7 @@ function startLevel() {
       buildGame();
     } catch (err) {
       console.error(err);
+      cgLoadingStop();
       UI.showMessage(T('loadError') + (err && err.message ? err.message : err), null, 15000);
     }
   }, 60);
@@ -1132,6 +1326,7 @@ function startLevel() {
    ------------------------------------------------------------ */
 function settleTour() {
   settled = true;
+  cgGameplayStop();               // CrazyGames: Ergebnis-Screen = kein Gameplay
   const rating = tourists ? tourists.averageRating() : lastRating;
   const fare = TICKET_PER_SIGHT * 3 + Math.round(Math.max(0, rating - 3) * STAR_BONUS);
   addMoney(fare);
@@ -1584,6 +1779,7 @@ function frame(now) {
       } catch (err) {
         console.error(err);
         running = false;
+        cgGameplayStop();
         UI.showMessage(T('loadError') + (err && err.message ? err.message : err), null, 15000);
       }
     }
@@ -1620,20 +1816,32 @@ UI.initUI({
     syncPad();
     lastT = performance.now();
     focusCanvas();
+    if (running) cgGameplayStart();   // CrazyGames: Spiel läuft weiter
   },
   onOpenMenu: () => openMenu(),
-  onResultContinue: () => startLevel(),                 // nächste Tour im selben Level (Geld + Upgrades bleiben)
-  onResultMenu: () => {
-    UI.hideResult();
-    mp.close();
-    mpSeed = null;
-    UI.setMpBarActive(false);
-    disposeLevel();
-    UI.setHUDVisible(false);
-    UI.setTouchVisible(false);
-    if (btnMenu) btnMenu.style.display = 'none';
-    UI.showMenu({ inGame: false });
+  // Nächste Tour im selben Level (Geld + Upgrades bleiben) – auf CrazyGames vorher Midgame-Werbung
+  onResultContinue: () => {
+    runMidgameAd(() => {
+      UI.hideResult();
+      startLevel();
+    });
   },
+  // Zurück ins Menü – auf CrazyGames vorher Midgame-Werbung
+  onResultMenu: () => {
+    runMidgameAd(() => {
+      UI.hideResult();
+      mp.close();
+      mpSeed = null;
+      UI.setMpBarActive(false);
+      disposeLevel();
+      UI.setHUDVisible(false);
+      UI.setTouchVisible(false);
+      if (btnMenu) btnMenu.style.display = 'none';
+      UI.showMenu({ inGame: false });
+    });
+  },
+  // Rewarded-Werbung (+500 €) – der Button ist nur auf CrazyGames sichtbar
+  onWatchRewarded: () => watchRewardedAd(),
   onBuyUpgrade: (id) => buyUpgrade(id),
   onSettingsChange: (s) => { if (level) level.setViewDistance(s.view); },
   onLanguageChange: (lang) => {
@@ -1682,6 +1890,10 @@ if (UI.setLevel4Unlocked) UI.setLevel4Unlocked(isLevel4Unlocked());
 requestAnimationFrame(frame);
 focusCanvas();
 
+// CrazyGames: Spiel ist geladen (Renderer, UI, Menü stehen) -> loadingStop nach dem ersten Frame.
+// Auf der eigenen Website passiert hier nichts (cgLoadingStop ist dort wirkungslos).
+cgReady.then(() => { requestAnimationFrame(() => cgLoadingStop()); });
+
 // Debug-Hilfe für die Konsole:
 //   BEYOND.visitAll()                   → alle 3 Sehenswürdigkeiten sofort abhaken
 //   BEYOND.addMoney(500)                → Geld für den Shop
@@ -1693,6 +1905,7 @@ focusCanvas();
 //   BEYOND.tourists.tourists[0].startTrip() → ein Tourist geht sofort aufs Klo
 //   BEYOND.resetSave()                  → Geld + Upgrades löschen
 //   BEYOND.mp                           → Multiplayer-Objekt (connected, role, remote ...)
+//   BEYOND.isCrazyGamesEnv              → true nur auf CrazyGames
 window.BEYOND = {
   get level() { return level; },
   get sub() { return sub; },
@@ -1705,6 +1918,7 @@ window.BEYOND = {
   get barSold() { return barSold; },
   get barCapacity() { return barCapacity; },
   get mp() { return mp; },
+  get isCrazyGamesEnv() { return isCrazyGamesEnv; },
   visitAll() { if (level) level.visitAll(); },
   addMoney(n) { addMoney(n || 100); },
   unlockLevel2() { return unlockLevel2(); },
