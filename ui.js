@@ -51,7 +51,7 @@ try {
 try {
   if (localStorage.getItem(LEVEL2_KEY) === 'true') level2Unlocked = true;
   if (localStorage.getItem(LEVEL3_KEY) === 'true') level3Unlocked = true;
-  if (localStorage.getItem(LEVEL4_KEY) === 'true') level4Unlocked = true;
+if (localStorage.getItem(LEVEL4_KEY) === 'true' || level3Unlocked) level4Unlocked = true;
 } catch (e) { /* ignorieren */ }
 
 function saveSettings() {
