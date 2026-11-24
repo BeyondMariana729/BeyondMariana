@@ -55,6 +55,7 @@ import { createSub, SUB } from './sub.js';
 import { buildLevel1, WORLD } from './world.js';
 import { buildLevel2, WORLD2 } from './level2.js';
 import { buildLevel3, WORLD3 } from './level3.js';
+import { buildLevel4, WORLD4, isLevel4Unlocked, markLevel3Complete } from './level4.js';
 import { createTourists } from './tourists.js';
 import { createMultiplayer } from './multiplayer.js';
 import * as UI from './ui.js';
@@ -70,7 +71,7 @@ const deadzone = (v, dz) => {
   const a = Math.abs(v);
   return a < dz ? 0 : Math.sign(v) * (a - dz) / (1 - dz);
 };
-const normLevel = (n) => { n = Number(n); return n === 3 ? 3 : (n === 2 ? 2 : 1); };
+const normLevel = (n) => { n = Number(n); return n === 4 ? 4 : (n === 3 ? 3 : (n === 2 ? 2 : 1)); };
 
 /* sub.js / tourists.js / shop.js kennen nur 'de' und 'en' -> alles andere = 'en' */
 const toDispLang = (l) => ((l || UI.settings.lang) === 'de' ? 'de' : 'en');
@@ -1038,7 +1039,10 @@ function buildGame() {
   const realRandom = Math.random;
   if (mp.connected && mpSeed !== null) Math.random = mulberry32(mpSeed);
   try {
-    if (currentLevelId === 3) {
+       if (currentLevelId === 4) {
+      level = buildLevel4(scene, renderer);
+      worldCfg = WORLD4;
+    } else if (currentLevelId === 3) {
       level = buildLevel3(scene, renderer);
       worldCfg = WORLD3;
     } else if (currentLevelId === 2) {
@@ -1048,6 +1052,7 @@ function buildGame() {
       level = buildLevel1(scene, renderer);
       worldCfg = WORLD;
     }
+
   } finally {
     Math.random = realRandom;
   }
@@ -1136,6 +1141,7 @@ function settleTour() {
   let newUnlock = 0;
   if (currentLevelId === 1) { if (unlockLevel2()) newUnlock = 2; }
   else if (currentLevelId === 2) { if (unlockLevel3()) newUnlock = 3; }
+    else if (currentLevelId === 3) { if (markLevel3Complete()) { newUnlock = 4; if (UI.setLevel4Unlocked) UI.setLevel4Unlocked(true); } }
 
   sub.setLight(false);
   sub.setParty(false);
@@ -1600,6 +1606,7 @@ UI.initUI({
   onStartLevel: (id) => {
     if (id === 2 && !level2Unlocked) return;
     if (id === 3 && !level3Unlocked) return;
+        if (id === 4 && !isLevel4Unlocked()) return;
     // Singleplayer: eine evtl. offene Multiplayer-Verbindung sauber beenden
     mp.close();
     mpSeed = null;
@@ -1671,6 +1678,7 @@ Shop.initShop({
 UI.setLevel2Unlocked(level2Unlocked);
 UI.setLevel3Unlocked(level3Unlocked);
 
+if (UI.setLevel4Unlocked) UI.setLevel4Unlocked(isLevel4Unlocked());
 requestAnimationFrame(frame);
 focusCanvas();
 
