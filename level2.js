@@ -7,7 +7,7 @@
    versunkene Piraten-Schatztruhe (Bonus) und verstreute Wrackteile
    (Spanten, Anker, Kanonen, Amphoren).
 
-   NEU in dieser Version:
+   Enthalten:
    - 3D-Höhenlandschaft: Sanddünen, tiefe Riff-Rinnen, erhöhte Plateaus,
      Hänge werden automatisch felsig eingefärbt.
    - Massive, kantige Felswände (Low-Poly, flat shaded) mit dichtem
@@ -15,9 +15,15 @@
    - 3 tropische Inseln (Strand, Gras, Palmen, Büsche, Felsen). Die Inseln
      sind Teil des Höhenfelds und damit VOLLSTÄNDIG massiv vom Meeresboden
      bis zur Spitze – kein Hohlraum, nichts zum Darunterdurchschwimmen.
-     Das U-Boot wird von Inseln auch seitlich zuverlässig abgeblockt.
    - Alle Platzierungen (Korallen, Wracks, Truhe, Bögen, Tiere) lesen die
      Höhe aus floorH() und passen sich dem Terrain an.
+
+   NEU in dieser Version:
+   - Hindernis-Raster für alle Tiere: Fische, Delfine, Schildkröten, Mantas,
+     Riffhai und Quallen weichen Korallen (Gehirn-, Ast-, Geweih-Korallen,
+     Schwämme, Anemonen), allen Felsen, den Felsklippen, den Korallenbögen,
+     Wrackteilen, Dock-Pfosten und den Inseln aus. Alle Kugel-Kollisionen
+     des U-Boots werden dabei mitbenutzt.
 
    Gleiche Schnittstelle wie world.js (buildLevel1):
      buildLevel2(scene, renderer) -> level
@@ -1587,6 +1593,69 @@ export function buildLevel2(scene, renderer) {
   decorInst(geoAmphoraHandles(), clayMat, amphList, true);
   decorInst(new THREE.BoxGeometry(0.4, 0.14, 2.8), wreckWood, plankList, false);
 
+  /* ==========================================================
+     HINDERNIS-RASTER für alle Tiere
+     Enthält alle Kollisionskugeln des U-Boots (Felsklippen, Bögen,
+     Wrackteile, große Korallen/Felsen) plus ALLE Korallen (Gehirn-,
+     Ast-, Geweih-Korallen, Schwämme, Anemonen), alle Felsen
+     (auch kleine) und die Dock-Pfosten. Raster-Zellen 24 m, damit pro
+     Tier nur wenige Hindernisse geprüft werden.
+     ========================================================== */
+  const OB_C = 24, OB_M = 12;
+  const obGrid = new Map();
+  const obKey = (ix, iz) => (ix + 2048) * 8192 + (iz + 2048);
+  {
+    const obAll = [];
+    spheres.forEach((c) => obAll.push({ x: c.x, y: c.y, z: c.z, r: c.r }));
+    pl.rock.forEach((o) => obAll.push({ x: o.x, y: o.y + (o.sy || o.s) * 0.3, z: o.z, r: o.s * 0.85 }));
+    pl.brain.forEach((o) => obAll.push({ x: o.x, y: o.y + o.s * 0.4, z: o.z, r: o.s * 0.9 }));
+    pl.branch.forEach((o) => obAll.push({ x: o.x, y: o.y + o.s * 1.0, z: o.z, r: o.s * 1.2 }));
+    pl.stag.forEach((o) => obAll.push({ x: o.x, y: o.y + o.s * 1.0, z: o.z, r: o.s * 1.1 }));
+    pl.sponge.forEach((o) => obAll.push({ x: o.x, y: o.y + o.s * 0.7, z: o.z, r: o.s * 1.1 }));
+    pl.anem.forEach((o) => obAll.push({ x: o.x, y: o.y + o.s * 1.0, z: o.z, r: o.s * 1.5 }));
+    DOCK_PILLARS.forEach((q) => { [-3, -9, -15, -21, -27].forEach((y) => obAll.push({ x: q[0], y, z: q[1], r: 1.0 })); });
+    obAll.forEach((o) => {
+      const r = o.r + OB_M;
+      const ix0 = Math.floor((o.x - r) / OB_C), ix1 = Math.floor((o.x + r) / OB_C);
+      const iz0 = Math.floor((o.z - r) / OB_C), iz1 = Math.floor((o.z + r) / OB_C);
+      for (let ix = ix0; ix <= ix1; ix++) {
+        for (let iz = iz0; iz <= iz1; iz++) {
+          const k = obKey(ix, iz);
+          let l = obGrid.get(k);
+          if (!l) { l = []; obGrid.set(k, l); }
+          l.push(o);
+        }
+      }
+    });
+  }
+  /* Lenkt ein Tier um Hindernisse herum.
+     pos: wird bei Berührung (Abstand < margin) herausgeschoben,
+     vel: (optional) verliert die Bewegung ins Hindernis und bekommt in der
+     weichen Zone (margin .. margin+4) einen sanften Ausweich-Impuls. */
+  function avoidObs(pos, vel, margin, dt) {
+    const list = obGrid.get(obKey(Math.floor(pos.x / OB_C), Math.floor(pos.z / OB_C)));
+    if (!list) return;
+    for (let i = 0; i < list.length; i++) {
+      const c = list[i];
+      const dx = pos.x - c.x, dy = pos.y - c.y, dz = pos.z - c.z;
+      const lim = c.r + margin, sf = lim + 4;
+      const d2 = dx * dx + dy * dy + dz * dz;
+      if (d2 >= sf * sf) continue;
+      const d = Math.sqrt(d2) || 0.0001;
+      const nx = dx / d, ny = dy / d, nz = dz / d;
+      if (d < lim) {
+        pos.x = c.x + nx * lim; pos.y = c.y + ny * lim; pos.z = c.z + nz * lim;
+        if (vel) {
+          const vn = vel.x * nx + vel.y * ny + vel.z * nz;
+          if (vn < 0) { vel.x -= nx * vn; vel.y -= ny * vn; vel.z -= nz * vn; }
+        }
+      } else if (vel && dt > 0) {
+        const k = (sf - d) / 4 * 30 * dt;
+        vel.x += nx * k; vel.y += ny * k; vel.z += nz * k;
+      }
+    }
+  }
+
   /* ---------- Instanzierte Meshes ---------- */
   function makeInst(geo, mat, list) {
     if (!list.length) return null;
@@ -1761,6 +1830,8 @@ export function buildLevel2(scene, renderer) {
       const spd = f.vel.length();
       if (spd > s.maxSp) f.vel.multiplyScalar(s.maxSp / spd);
       f.pos.addScaledVector(f.vel, dt);
+      avoidObs(f.pos, f.vel, f.size * 0.55 + 0.8, dt);     // Korallen, Felsen, Klippen, Bögen, Wrackteile umschwimmen
+      avoidIslands(f.pos, 1.2);                            // Inseln umschwimmen
       const fl = floorH(f.pos.x, f.pos.z) + 1.2;
       if (f.pos.y < fl) f.pos.y = fl;
       if (f.pos.y > -2) f.pos.y = -2;
@@ -1783,7 +1854,7 @@ export function buildLevel2(scene, renderer) {
     t.g.scale.setScalar(size);
     root.add(t.g);
     const o = { cx: PATCHES[pi].x, cz: PATCHES[pi].z, Rx: 40 + i * 8, Rz: 30 + i * 6, w: 0.06 + i * 0.005, ph: i * 1.9, h0: 9 + i * 1.8, hA: 4 };
-    turtles.push({ t, o, ph: i * 1.3, pos: t.g.position });
+    turtles.push({ t, o, ph: i * 1.3, pos: t.g.position, m: size * 2.2 });
   });
 
   const dolphins = [];
@@ -1792,6 +1863,7 @@ export function buildLevel2(scene, renderer) {
     root.add(d.g);
     const D = { d, i, ph: i * 0.9, pos: d.g.position };
     dolphinPos(i, 0, D.pos);
+    avoidObs(D.pos, null, 4.5, 0);
     dolphins.push(D);
   }
 
@@ -1801,12 +1873,13 @@ export function buildLevel2(scene, renderer) {
     m.g.scale.setScalar(size);
     root.add(m.g);
     const o = { cx, cz, Rx: 150, Rz: 110, w: 0.045 - i * 0.005, ph: i * 2.3, h0: 18, hA: 8 };
-    mantas.push({ m, o, ph: i * 1.1, w: { pos: m.g.position } });
+    mantas.push({ m, o, ph: i * 1.1, w: { pos: m.g.position }, mg: size * 4.5 });
   });
   const sharkB = buildShark();
   root.add(sharkB.g);
   const shark = { b: sharkB, pos: sharkB.g.position };
   orbitPos(SHARK_ORBIT, 0, shark.pos);
+  avoidObs(shark.pos, null, 7, 0);
 
   /* ==========================================================
      Quallen
@@ -2096,13 +2169,15 @@ export function buildLevel2(scene, renderer) {
     // Bojen
     buoys.forEach((b) => { b.m.position.y = 0.1 + Math.sin(time * 1.3 + b.ph) * 0.15; });
 
-    // Fische
+    // Fische (weichen Korallen, Felsen, Klippen, Bögen und Inseln aus)
     for (let i = 0; i < schools.length; i++) updateSchool(schools[i], dt);
 
-    // Schildkröten
+    // Schildkröten (weichen Hindernissen aus)
     turtles.forEach((T) => {
       orbitPos(T.o, time, T.pos);
+      avoidObs(T.pos, null, T.m, 0);
       orbitPos(T.o, time + 0.6, _tmp);
+      avoidObs(_tmp, null, T.m, 0);
       T.t.g.lookAt(_tmp);
       const f = Math.sin(time * 1.8 + T.ph);
       T.t.fl[0].rotation.z = -f * 0.45; T.t.fl[1].rotation.z = f * 0.45;
@@ -2110,34 +2185,41 @@ export function buildLevel2(scene, renderer) {
       T.t.body.rotation.z = Math.sin(time * 0.9 + T.ph) * 0.06;
     });
 
-    // Delfine: gemeinsame Wellenbögen
+    // Delfine: gemeinsame Wellenbögen (weichen Hindernissen aus)
     dolphins.forEach((D) => {
       dolphinPos(D.i, time, D.pos);
+      avoidObs(D.pos, null, 4.5, 0);
       dolphinPos(D.i, time + 0.35, _tmp);
+      avoidObs(_tmp, null, 4.5, 0);
       D.d.g.lookAt(_tmp);
       D.d.rear.rotation.x = Math.sin(time * 3.4 + D.ph) * 0.15;
       D.d.fluke.rotation.x = Math.sin(time * 3.4 + D.ph - 0.9) * 0.32;
     });
 
-    // Mantas
+    // Mantas (weichen Hindernissen aus)
     mantas.forEach((M) => {
       orbitPos(M.o, time, M.m.g.position);
+      avoidObs(M.m.g.position, null, M.mg, 0);
       orbitPos(M.o, time + 0.6, _tmp);
+      avoidObs(_tmp, null, M.mg, 0);
       M.m.g.lookAt(_tmp);
       const f = Math.sin(time * 1.6 + M.ph) * 0.32;
       M.m.wings[0].rotation.z = -f; M.m.wings[1].rotation.z = f;
     });
 
-    // Riffhai
+    // Riffhai (weicht Hindernissen aus)
     orbitPos(SHARK_ORBIT, time, shark.pos);
+    avoidObs(shark.pos, null, 7, 0);
     orbitPos(SHARK_ORBIT, time + 0.6, _tmp);
+    avoidObs(_tmp, null, 7, 0);
     shark.b.g.lookAt(_tmp);
     shark.b.tail.rotation.y = Math.sin(time * 3.2) * 0.35;
     shark.b.body.rotation.y = Math.sin(time * 3.2 + 1) * 0.06;
 
-    // Quallen
+    // Quallen (treiben um Hindernisse herum)
     jellies.forEach((j) => {
       j.pos.set(j.base.x + Math.sin(time * 0.2 + j.ph) * 3, j.base.y + Math.sin(time * 0.6 + j.ph) * 2, j.base.z + Math.cos(time * 0.17 + j.ph) * 3);
+      avoidObs(j.pos, null, j.r, 0);
       const pulse = Math.sin(time * 2.2 + j.ph);
       j.bell.scale.set(j.s * (1 - pulse * 0.06), j.s * (0.8 + pulse * 0.16), j.s * (1 - pulse * 0.06));
       j.tent.scale.y = j.s * (1 - pulse * 0.1);
