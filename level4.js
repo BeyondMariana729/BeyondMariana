@@ -15,6 +15,14 @@
      1  Überwucherte Jade-Pyramide (Jade-Feuerschalen + goldene Partikel)
      2  Quetzalcoatl-Flussschlange (Kollision -> Bounce-Rückstoß)
 
+   NEU in dieser Version:
+   - Hindernis-Raster für alle schwimmenden Tiere: Mangroven-Stämme
+     und Stelzenwurzeln, Säulen, Statuen, Stelen, Felsen, Gehirnkorallen,
+     Jade-Kristalle, Dock-Pfosten, Sonnentor und Pyramide (gedrehte Boxen).
+     Fische, Flussdelfine, Schildkröten und jedes Segment der
+     Quetzalcoatl-Schlange lenken rechtzeitig um diese Objekte herum
+     bzw. werden sanft herausgeschoben.
+
    Gleiche Schnittstelle wie level2.js:
    level.spawn, schools, fauna, sights, sightCount, setViewDistance(v),
    update(dt, ctx), collideSub(p, vel, r), drainEvents(), isAtPlatform(p),
@@ -762,9 +770,6 @@ function geoMangrove(r, opt) {
 }
 
 /* ------------------------------------------------------------
-   Palmen (nur Dock)
-   ------------------------------------------------------------ */
-/* ------------------------------------------------------------
    Fische
    ------------------------------------------------------------ */
 const SPECIES = {
@@ -989,6 +994,7 @@ export function buildLevel4(scene, renderer) {
   const spheres = [];                // statische Kugeln {x,y,z,r}
   const obbs = [];                   // gedrehte Boxen (Tor, Pyramide)
   const trees = [];                  // Mangroven mit Wurzel-Kugeln
+  const treeObs = [];                // zusätzliche Baum-Hindernisse (Stämme) nur für Tiere
   const addSphere = (x, y, z, r) => spheres.push({ x, y, z, r });
 
   /* Koordinaten-Rahmen für Tor und Pyramide (lokal -> Welt) */
@@ -1190,6 +1196,10 @@ export function buildLevel4(scene, renderer) {
   function placeTree(v, x, z, s, ry) {
     treeInst[v].push({ x, z, s, ry });
     treeXZ.push([x, z]);
+    /* Stamm- und Wurzelkern als Hindernis für Tiere (auch bei Ufer-Bäumen) */
+    treeObs.push({ x, y: -1.5, z, r: 1.6 * s });
+    treeObs.push({ x, y: -4.5, z, r: 2.4 * s });
+    if (v === 3) treeObs.push({ x, y: -7, z, r: 5.5 * s });
     if (v > 2) return;
     const cs = Math.cos(ry), sn = Math.sin(ry), sp = [];
     FULL[v].colliders.forEach(([lx, ly, lz, r]) => {
@@ -1554,6 +1564,110 @@ export function buildLevel4(scene, renderer) {
   makeInst(new THREE.PlaneGeometry(2.2, 6.2), reliefMat, pl.relief);
 
   /* ==========================================================
+     HINDERNIS-RASTER für alle schwimmenden Tiere
+     Enthält:
+       - alle statischen Kugeln (Säulen, Statuen, Stelen, Felsen, große Korallen)
+       - Mangroven-Stelzenwurzeln + Stamm-/Wurzelkerne aller Bäume
+       - ALLE Felsen, Gehirnkorallen und Jade-Kristalle (auch kleine)
+       - Dock-Pfosten
+       - Sonnentor und Pyramide (gedrehte Boxen, 3D)
+     Alles liegt in einem 2D-Raster (Zellen 24 m), damit pro Tier nur
+     wenige Hindernisse geprüft werden müssen.
+     ========================================================== */
+  const OB_C = 24, OB_M = 12;
+  const obGrid = new Map();
+  const obKey = (ix, iz) => (ix + 2048) * 8192 + (iz + 2048);
+  {
+    const obAll = [];
+    spheres.forEach((c) => obAll.push({ t: 0, x: c.x, y: c.y, z: c.z, r: c.r }));
+    trees.forEach((T) => T.sp.forEach((c) => obAll.push({ t: 0, x: c.x, y: c.y, z: c.z, r: c.r })));
+    treeObs.forEach((c) => obAll.push({ t: 0, x: c.x, y: c.y, z: c.z, r: c.r }));
+    pl.rock.forEach((o) => obAll.push({ t: 0, x: o.x, y: o.y + (o.sy || o.s) * 0.3, z: o.z, r: o.s * 0.85 }));
+    pl.brain.forEach((o) => obAll.push({ t: 0, x: o.x, y: o.y + o.s * 0.4, z: o.z, r: o.s * 0.9 }));
+    pl.crystal.forEach((o) => obAll.push({ t: 0, x: o.x, y: o.y + o.s * 1.5, z: o.z, r: o.s * 1.3 }));
+    DOCK_PILLARS.forEach((q) => { [-3, -9, -15, -21].forEach((y) => obAll.push({ t: 0, x: q[0], y, z: q[1], r: 1.0 })); });
+    obbs.forEach((b) => {
+      const wx = b.ox + b.cx * b.c + b.cz * b.s, wz = b.oz - b.cx * b.s + b.cz * b.c;
+      obAll.push({ t: 1, b, x: wx, z: wz, r: Math.hypot(b.hx, b.hz) });
+    });
+    obAll.forEach((o) => {
+      const r = o.r + OB_M;
+      const ix0 = Math.floor((o.x - r) / OB_C), ix1 = Math.floor((o.x + r) / OB_C);
+      const iz0 = Math.floor((o.z - r) / OB_C), iz1 = Math.floor((o.z + r) / OB_C);
+      for (let ix = ix0; ix <= ix1; ix++) {
+        for (let iz = iz0; iz <= iz1; iz++) {
+          const k = obKey(ix, iz);
+          let l = obGrid.get(k);
+          if (!l) { l = []; obGrid.set(k, l); }
+          l.push(o);
+        }
+      }
+    });
+  }
+  /* Lenkt ein Tier um Hindernisse herum.
+     pos: wird bei Berührung (Abstand < margin) herausgeschoben,
+     vel: (optional) verliert die Bewegung ins Hindernis und bekommt in der
+     weichen Zone (margin .. margin+4) einen sanften Ausweich-Impuls. */
+  function avoidObs(pos, vel, margin, dt) {
+    const list = obGrid.get(obKey(Math.floor(pos.x / OB_C), Math.floor(pos.z / OB_C)));
+    if (!list) return;
+    for (let i = 0; i < list.length; i++) {
+      const o = list[i];
+      if (o.t === 0) {
+        const dx = pos.x - o.x, dy = pos.y - o.y, dz = pos.z - o.z;
+        const lim = o.r + margin, sf = lim + 4;
+        const d2 = dx * dx + dy * dy + dz * dz;
+        if (d2 >= sf * sf) continue;
+        const d = Math.sqrt(d2) || 0.0001;
+        const nx = dx / d, ny = dy / d, nz = dz / d;
+        if (d < lim) {
+          pos.x = o.x + nx * lim; pos.y = o.y + ny * lim; pos.z = o.z + nz * lim;
+          if (vel) {
+            const vn = vel.x * nx + vel.y * ny + vel.z * nz;
+            if (vn < 0) { vel.x -= nx * vn; vel.y -= ny * vn; vel.z -= nz * vn; }
+          }
+        } else if (vel && dt > 0) {
+          const k = (sf - d) / 4 * 30 * dt;
+          vel.x += nx * k; vel.y += ny * k; vel.z += nz * k;
+        }
+      } else {
+        const b = o.b;
+        const dx = pos.x - b.ox, dz = pos.z - b.oz;
+        const lx = dx * b.c - dz * b.s, lz = dx * b.s + dz * b.c;
+        const qx = clamp(lx, b.cx - b.hx, b.cx + b.hx), qy = clamp(pos.y, b.y0, b.y1), qz = clamp(lz, b.cz - b.hz, b.cz + b.hz);
+        const ex = lx - qx, ey = pos.y - qy, ez = lz - qz;
+        const d2 = ex * ex + ey * ey + ez * ez;
+        const sf = margin + 4;
+        if (d2 >= sf * sf) continue;
+        let nlx = 0, ny = 0, nlz = 0, d, inside = false;
+        if (d2 > 1e-8) { d = Math.sqrt(d2); nlx = ex / d; ny = ey / d; nlz = ez / d; }
+        else {                                   // im Inneren der Box: über die nächste Fläche hinaus
+          const pxm = lx - (b.cx - b.hx), pxp = (b.cx + b.hx) - lx, pzm = lz - (b.cz - b.hz), pzp = (b.cz + b.hz) - lz, pym = pos.y - b.y0, pyp = b.y1 - pos.y;
+          const m = Math.min(pxm, pxp, pzm, pzp, pym, pyp);
+          if (m === pxm) nlx = -1; else if (m === pxp) nlx = 1; else if (m === pzm) nlz = -1; else if (m === pzp) nlz = 1; else if (m === pym) ny = -1; else ny = 1;
+          d = -m; inside = true;
+        }
+        const nx = nlx * b.c + nlz * b.s, nz = -nlx * b.s + nlz * b.c;
+        if (d < margin) {
+          const push = margin - d;
+          pos.x += nx * push; pos.y += ny * push; pos.z += nz * push;
+          if (vel) {
+            const vn = vel.x * nx + vel.y * ny + vel.z * nz;
+            if (vn < 0) { vel.x -= nx * vn; vel.y -= ny * vn; vel.z -= nz * vn; }
+          }
+        } else if (vel && dt > 0 && !inside) {
+          const k = (sf - d) / 4 * 30 * dt;
+          vel.x += nx * k; vel.y += ny * k; vel.z += nz * k;
+        }
+      }
+    }
+  }
+  /* Bahnen mit Ausweichen (Delfine/Schildkröten): Die Projektion aus dem
+     Hindernis heraus ist stetig, die Bahn bleibt also ruckelfrei. */
+  function orbitSafe(o, t, out, margin) { orbitPos(o, t, out); avoidObs(out, null, margin, 0); return out; }
+  function dolphinSafe(i, t, out, margin) { dolphinPos(i, t, out); avoidObs(out, null, margin, 0); return out; }
+
+  /* ==========================================================
      Dock (Plattform an der Oberfläche) – Pfosten bis in den Sand
      ========================================================== */
   const buoys = [];
@@ -1674,6 +1788,7 @@ export function buildLevel4(scene, renderer) {
       const spd = f.vel.length();
       if (spd > s.maxSp) f.vel.multiplyScalar(s.maxSp / spd);
       f.pos.addScaledVector(f.vel, dt);
+      avoidObs(f.pos, f.vel, f.size * 0.55 + 0.8, dt);     // Bäume, Wurzeln, Säulen, Felsen, Tor, Pyramide umschwimmen
       const fl = floorH(f.pos.x, f.pos.z) + 1.2;
       if (f.pos.y < fl) f.pos.y = fl;
       if (f.pos.y > -2) f.pos.y = -2;
@@ -1696,23 +1811,24 @@ export function buildLevel4(scene, renderer) {
     t.g.scale.setScalar(size);
     root.add(t.g);
     const p = PATCHES[pi];
-    const o = { cx: p.x, cz: p.z, Rx: 30 + i * 7, Rz: 26 + i * 6, w: 0.06 + i * 0.005, ph: i * 1.9, h0: 8 + i * 1.6, hA: 3.5 };
+    const o = { cx: p.x, cz: p.z, Rx: 30 + i * 7, Rz: 26 + i * 6, w: 0.06 + i * 0.005, ph: i * 1.9, h0: 8 + i * 1.6, hA: 3.5, m: size * 2.2 };
     turtles.push({ t, o, ph: i * 1.3, pos: t.g.position });
-    orbitPos(o, 0, t.g.position);
+    orbitSafe(o, 0, t.g.position, o.m);
   });
   const dolphins = [];
   for (let i = 0; i < 4; i++) {
     const d = buildDolphin();
     root.add(d.g);
     const D = { d, i, ph: i * 0.9, pos: d.g.position };
-    dolphinPos(i, 0, D.pos);
+    dolphinSafe(i, 0, D.pos, 4.5);
     dolphins.push(D);
   }
 
   /* ==========================================================
      SEHENSWÜRDIGKEIT 2: Quetzalcoatl – gefiederte Flussschlange
      Smaragdgrün-golden, leuchtende Augen, Kollisions-Kugeln entlang
-     des ganzen Körpers (Bounce-Rückstoß).
+     des ganzen Körpers (Bounce-Rückstoß). Jedes Körperglied weicht
+     Mangroven, Ruinen, Felsen und der Pyramide aus.
      ========================================================== */
   const SERP = { N: 46, space: 3.0, R0: 3.4, w: 0.055, ring: 74 };
   const segPos = Array.from({ length: SERP.N }, () => new THREE.Vector3());
@@ -1797,11 +1913,18 @@ export function buildLevel4(scene, renderer) {
 
   function updateSerpent(dt) {
     const a0 = SERP.w * time, dA = SERP.space / SERP.ring;
-    for (let i = 0; i < SERP.N; i++) serpPath(a0 - i * dA, Math.sin(i * 0.55 - time * 2.4), segPos[i]);
+    /* Blickpunkt vor dem Kopf (auch er weicht Hindernissen aus) */
+    serpPath(a0 + 0.05, Math.sin(-time * 2.4), serpAhead);
+    avoidObs(serpAhead, null, SERP.R0 + 2.5, 0);
+    for (let i = 0; i < SERP.N; i++) {
+      serpPath(a0 - i * dA, Math.sin(i * 0.55 - time * 2.4), segPos[i]);
+      avoidObs(segPos[i], null, segR[i] + 2.2, 0);          // jedes Körperglied biegt um Bäume/Ruinen/Felsen
+      avoidObs(segPos[i], null, segR[i] + 2.2, 0);          // zweiter Durchgang bei dicht stehenden Hindernissen
+    }
     for (let i = 0; i < SERP.N; i++) {
       const r = segR[i];
       dummy.position.copy(segPos[i]);
-      dummy.lookAt(i === 0 ? serpPath(a0 + 0.05, Math.sin(-time * 2.4), serpAhead) : segPos[i - 1]);
+      dummy.lookAt(i === 0 ? serpAhead : segPos[i - 1]);
       dummy.scale.set(r, r * 0.92, r * 1.25);
       dummy.updateMatrix();
       serpBody.setMatrixAt(i, dummy.matrix);
@@ -2038,13 +2161,13 @@ export function buildLevel4(scene, renderer) {
     // Bojen
     buoys.forEach((b) => { b.m.position.y = 0.1 + Math.sin(time * 1.3 + b.ph) * 0.15; });
 
-    // Fische
+    // Fische (weichen Hindernissen aus)
     for (let i = 0; i < schools.length; i++) updateSchool(schools[i], dt);
 
-    // Schildkröten
+    // Schildkröten (weichen Hindernissen aus)
     turtles.forEach((T) => {
-      orbitPos(T.o, time, T.pos);
-      orbitPos(T.o, time + 0.6, _tmp);
+      orbitSafe(T.o, time, T.pos, T.o.m);
+      orbitSafe(T.o, time + 0.6, _tmp, T.o.m);
       T.t.g.lookAt(_tmp);
       const f = Math.sin(time * 1.8 + T.ph);
       T.t.fl[0].rotation.z = -f * 0.45; T.t.fl[1].rotation.z = f * 0.45;
@@ -2052,16 +2175,16 @@ export function buildLevel4(scene, renderer) {
       T.t.body.rotation.z = Math.sin(time * 0.9 + T.ph) * 0.06;
     });
 
-    // rosa Flussdelfine
+    // rosa Flussdelfine (weichen Hindernissen aus)
     dolphins.forEach((D) => {
-      dolphinPos(D.i, time, D.pos);
-      dolphinPos(D.i, time + 0.35, _tmp);
+      dolphinSafe(D.i, time, D.pos, 4.5);
+      dolphinSafe(D.i, time + 0.35, _tmp, 4.5);
       D.d.g.lookAt(_tmp);
       D.d.rear.rotation.x = Math.sin(time * 3.4 + D.ph) * 0.15;
       D.d.fluke.rotation.x = Math.sin(time * 3.4 + D.ph - 0.9) * 0.32;
     });
 
-    // Quetzalcoatl
+    // Quetzalcoatl (jedes Glied weicht Hindernissen aus)
     updateSerpent(dt);
 
     // Jade-Flammen und aufsteigende Goldpartikel
