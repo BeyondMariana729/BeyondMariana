@@ -26,6 +26,7 @@ const STORAGE_KEY = 'beyond-mariana-settings-v1';
 const MP_NAME_KEY = 'beyond-mariana-mp-name';
 export const LEVEL2_KEY = 'beyondMariana_level2Unlocked';
 export const LEVEL3_KEY = 'beyondMariana_level3Unlocked';
+export const LEVEL4_KEY = 'beyondMariana_level4Unlocked';
 
 /* ---------- Sprachen ---------- */
 export const LANGS = ['en', 'de', 'fr', 'nl', 'pl'];
@@ -35,6 +36,7 @@ export const LANGS = ['en', 'de', 'fr', 'nl', 'pl'];
 export const settings = { lang: 'en', view: 1 };
 let level2Unlocked = false;
 let level3Unlocked = false;
+let level4Unlocked = false;
 
 try {
   const raw = localStorage.getItem(STORAGE_KEY);
@@ -49,6 +51,7 @@ try {
 try {
   if (localStorage.getItem(LEVEL2_KEY) === 'true') level2Unlocked = true;
   if (localStorage.getItem(LEVEL3_KEY) === 'true') level3Unlocked = true;
+  if (localStorage.getItem(LEVEL4_KEY) === 'true') level4Unlocked = true;
 } catch (e) { /* ignorieren */ }
 
 function saveSettings() {
@@ -113,7 +116,11 @@ export const I18N = {
     lockedToast: 'This level is still locked.',
     lvl2LockedToast: 'Level 2 is locked – finish a tour in Level 1 first!',
     lvl3LockedToast: 'Level 3 is locked – finish a tour in Level 2 first!',
-    modeExt: 'EXTERIOR CAMERA',
+       lvl4Name: 'Sunken Maya Amazon River',
+    lvl4Desc: 'Lush mangrove jungle river, sunken jade pyramid and the giant Quetzalcoatl serpent!',
+    lvl4LockedDesc: 'Locked – finish a tour in Level 3 first',
+    lvl4LockedToast: 'Level 4 is still locked – finish a tour in Level 3 first!',
+     modeExt: 'EXTERIOR CAMERA',
     modeCockpit: 'COCKPIT CAMERA',
     modeWalk: 'INSIDE THE SUB',
     objSights: 'Visit the sights ({n}/3) – follow the pings on the radar',
@@ -1139,7 +1146,11 @@ export function setLanguage(lang) {
   saveSettings();
   applyLanguage();
 }
-
+export function setLevel4Unlocked(v) {
+  level4Unlocked = !!v;
+  try { localStorage.setItem(LEVEL4_KEY, level4Unlocked ? 'true' : 'false'); } catch (e) {}
+  renderLevels();
+}
 /* ---------- Level-Karten ---------- */
 function renderLevels() {
   renderMpLevels();
@@ -1147,7 +1158,8 @@ function renderLevels() {
   if (!list) return;
   list.innerHTML = '';
   LEVELS.forEach((lv) => {
-    const open = levelOpen(lv);
+        if (lv.id === 4) { lv.playable = true; lv.nameKey = 'lvl4Name'; lv.descKey = 'lvl4Desc'; lv.lockedDescKey = 'lvl4LockedDesc'; lv.lockedToastKey = 'lvl4LockedToast'; }
+    const open = lv.id === 4 ? level4Unlocked : levelOpen(lv);
     const btn = document.createElement('button');
     btn.className = 'level-card cut ' + (open ? 'playable' : 'locked');
     btn.type = 'button';
@@ -1238,7 +1250,7 @@ export function enterGame() {
 
 function startLevel(id) {
   const lv = LEVELS.find((l) => l.id === id);
-  if (!lv || !levelOpen(lv)) return;
+    if (!lv || !(id === 4 ? level4Unlocked : levelOpen(lv))) return;
   hideMenu();
   inGame = true;
   if (cb.onStartLevel) cb.onStartLevel(id);
@@ -1533,7 +1545,7 @@ export function initUI(callbacks) {
       const id = Number(mpl.getAttribute('data-mplevel'));
       if (!levelUnlocked(id)) {
         const hint = $('mp-level-hint');
-        if (hint) hint.textContent = t(id === 3 ? 'mpL3Locked' : 'mpL2Locked');
+        if (hint) hint.textContent = t(id === 4 ? 'lvl4LockedToast' : (id === 3 ? 'mpl3Locked' : 'mpl2Locked'));
         clearTimeout(mpHintTimer);
         mpHintTimer = setTimeout(renderMpLevels, 2600);
         mpl.animate(
