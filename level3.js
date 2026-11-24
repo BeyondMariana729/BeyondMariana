@@ -16,6 +16,14 @@
      gegen Boden, Dach, Säulen und Felsen geprüft; die Bahn wird bei Bedarf
      automatisch verkleinert. Der Höhlen-Innenraum ist frei von Säulen/Felsen.
 
+   NEU in dieser Version:
+   - Monster-Kollision: Das Riesenmonster ist jetzt fest. Berührt das U-Boot
+     eine der Körper-Kugeln (Kopf, Maul, Rumpf, Flossen, Schwanz), wird es
+     sanft nach außen geschoben (Bounce-Impuls) und der Rückgabewert "impact"
+     sorgt für das Kamera-Rütteln. Zusätzlich Event 'monster-bump'.
+   - Fische und Quallen weichen Schlot-Säulen, Felsen, Alkoven, Wrack und
+     Herz-Kristall aus (Hindernis-Raster, sanftes Umlenken + hartes Abprallen).
+
    Gleiche Schnittstelle wie world.js / level2.js:
      buildLevel3(scene, renderer) -> level
    level.spawn, schools, fauna, sights, sightCount, setViewDistance(v),
@@ -1048,7 +1056,7 @@ function buildMonster() {
   return { g, body, jaw, tail1, tail2, tail3, fins, lure, bulb, bulbM, phMat, halo };
 }
 
-/* Körperpunkte des Monsters (lokal, vor Skalierung) + Radius – für die Kollisions-Validierung */
+/* Körperpunkte des Monsters (lokal, vor Skalierung) + Radius – für Bahn-Validierung UND Kollision */
 const MON_PROBES = [
   [0, 10.5, 19.5, 3.8], [0, 0, 9.5, 8.5], [0, -7, 12, 5.5], [0, 1.2, 0, 9.5], [0, 8, -4, 5],
   [-15, -2, 0.5, 5], [15, -2, 0.5, 5], [0, 0, -10, 8.5], [0, 0, -20, 6.5], [6, 0, -30, 6.5], [-6, 0, -30, 6.5],
@@ -1080,6 +1088,7 @@ export function buildLevel3(scene, renderer) {
   const _nrm = new THREE.Vector3();
   const _nrm2 = new THREE.Vector3();
   const _v = new THREE.Vector3();
+  const _mv = new THREE.Vector3();
   const UP = new THREE.Vector3(0, 1, 0);
   const DOWN = new THREE.Vector3(0, -1, 0);
   const SP = {};                                  // Temp für chanSpot
@@ -1615,6 +1624,66 @@ export function buildLevel3(scene, renderer) {
   const wreckPos = new THREE.Vector3(WS.x + WS.ux * 2, wgy + 4, WS.z + WS.uz * 2);
   const zWreck = addZone(WS.x + WS.ux * 8, wgy + 5, WS.z + WS.uz * 8, 0xfff0b8, 34, 1900, 0.35, 0.25);
 
+  /* ==========================================================
+     HINDERNIS-RASTER für Fische & Quallen
+     Enthält alle statischen Kugeln (Felsen, Alkoven, Wrack, Herz-Kristall)
+     plus die Schlot-Säulen (als Kugelkette). Alle Kugeln sind in einem
+     2D-Raster (Zellen 24 m) eingetragen, sodass pro Tier nur wenige
+     Hindernisse geprüft werden.
+     ========================================================== */
+  const OB_C = 24, OB_M = 8;
+  const obGrid = new Map();
+  const obKey = (ix, iz) => (ix + 2048) * 8192 + (iz + 2048);
+  {
+    const obList = [];
+    for (let i = 0; i < spheres.length; i++) obList.push(spheres[i]);
+    pillars.forEach((P) => {
+      for (let y = P.y0; y <= P.y1 + 0.01; y += 5) {
+        const t = clamp((y - P.y0) / P.h, 0, 1);
+        obList.push({ x: P.x, y, z: P.z, r: pillarR(P, t) });
+      }
+      obList.push({ x: P.x, y: P.y1, z: P.z, r: pillarR(P, 1) });
+    });
+    obList.forEach((o) => {
+      const r = o.r + OB_M;
+      const ix0 = Math.floor((o.x - r) / OB_C), ix1 = Math.floor((o.x + r) / OB_C);
+      const iz0 = Math.floor((o.z - r) / OB_C), iz1 = Math.floor((o.z + r) / OB_C);
+      for (let ix = ix0; ix <= ix1; ix++) {
+        for (let iz = iz0; iz <= iz1; iz++) {
+          const k = obKey(ix, iz);
+          let l = obGrid.get(k);
+          if (!l) { l = []; obGrid.set(k, l); }
+          l.push(o);
+        }
+      }
+    });
+  }
+  /* Weicht Hindernissen aus: harter Abstand (Position wird herausgeschoben,
+     Geschwindigkeit nach innen entfernt) + weiche Zone (Lenkimpuls nach außen). */
+  function avoidObs(pos, vel, margin, dt) {
+    const list = obGrid.get(obKey(Math.floor(pos.x / OB_C), Math.floor(pos.z / OB_C)));
+    if (!list) return;
+    for (let i = 0; i < list.length; i++) {
+      const c = list[i];
+      const dx = pos.x - c.x, dy = pos.y - c.y, dz = pos.z - c.z;
+      const lim = c.r + margin, soft = lim + 4;
+      const d2 = dx * dx + dy * dy + dz * dz;
+      if (d2 >= soft * soft) continue;
+      const d = Math.sqrt(d2) || 0.0001;
+      const nx = dx / d, ny = dy / d, nz = dz / d;
+      if (d < lim) {
+        pos.x = c.x + nx * lim; pos.y = c.y + ny * lim; pos.z = c.z + nz * lim;
+        if (vel) {
+          const vn = vel.x * nx + vel.y * ny + vel.z * nz;
+          if (vn < 0) { vel.x -= nx * vn; vel.y -= ny * vn; vel.z -= nz * vn; }
+        }
+      } else if (vel && dt > 0) {
+        const k = (soft - d) / 4 * 30 * dt;
+        vel.x += nx * k; vel.y += ny * k; vel.z += nz * k;
+      }
+    }
+  }
+
   /* ---------- Licht-Pool: 6 PointLights wandern zu den hellsten Zonen ---------- */
   const poolLights = [];
   for (let i = 0; i < LIGHT_POOL; i++) {
@@ -1828,6 +1897,22 @@ export function buildLevel3(scene, renderer) {
   monsterPath(0, monsterPos);
   const zMon = addZone(monsterPos.x, monsterPos.y, monsterPos.z, 0x8ff0ff, 70, 3200, 0, 0.15);
 
+  /* ---------- Monster-Kollision: Körper-Kugeln (Weltkoordinaten, bewegen sich mit) ---------- */
+  const monSph = MON_PROBES.map((pr) => ({ lx: pr[0], ly: pr[1], lz: pr[2], r: pr[3] * MON_SCALE, x: 0, y: 0, z: 0 }));
+  function refreshMonster() {
+    monster.g.updateMatrixWorld(true);
+    const mw = monster.g.matrixWorld;
+    for (let i = 0; i < monSph.length; i++) {
+      const s = monSph[i];
+      _mv.set(s.lx, s.ly, s.lz).applyMatrix4(mw);
+      s.x = _mv.x; s.y = _mv.y; s.z = _mv.z;
+    }
+  }
+  monsterPath(0.8, _tmp);
+  monster.g.lookAt(_tmp);
+  refreshMonster();
+  let monCd = -10;
+
   /* ==========================================================
      Leucht-Fischschwärme: auf allen Tiefen
      ========================================================== */
@@ -1908,6 +1993,7 @@ export function buildLevel3(scene, renderer) {
       const spd = f.vel.length();
       if (spd > s.maxSp) f.vel.multiplyScalar(s.maxSp / spd);
       f.pos.addScaledVector(f.vel, dt);
+      avoidObs(f.pos, f.vel, f.size * 0.55 + 0.8, dt);     // Felsen / Säulen / Wrack umschwimmen
       const fl = floorH(f.pos.x, f.pos.z) + 1.5;
       if (f.pos.y < fl) f.pos.y = fl;
       const cl = ceilH(f.pos.x, f.pos.z) - 4;
@@ -1976,7 +2062,7 @@ export function buildLevel3(scene, renderer) {
   }
 
   /* ==========================================================
-     Kollision (Höhenfeld inkl. steiler Wände, Dach, Säulen, Felsen, Dock)
+     Kollision (Höhenfeld inkl. steiler Wände, Dach, Säulen, Felsen, Dock, Monster)
      ========================================================== */
   const RING = [[0, 0, 0]];
   [0.25, 0.5, 0.75, 1.0].forEach((f, ri) => {
@@ -2077,6 +2163,29 @@ export function buildLevel3(scene, renderer) {
       if (vn < 0) { impact = Math.max(impact, -vn); vel.x -= nx * vn; vel.y -= ny * vn; vel.z -= nz * vn; }
     }
 
+    // Riesenmonster: fester Körper aus Kugeln (Kopf, Maul, Rumpf, Flossen, Schwanz).
+    // Das U-Boot wird nach außen geschoben und bekommt einen sanften Bounce-Impuls.
+    {
+      let bumped = false;
+      for (let i = 0; i < monSph.length; i++) {
+        const c = monSph[i];
+        const dx = p.x - c.x, dy = p.y - c.y, dz = p.z - c.z;
+        const lim = c.r + R;
+        const d2 = dx * dx + dy * dy + dz * dz;
+        if (d2 >= lim * lim) continue;
+        const d = Math.sqrt(d2) || 0.0001;
+        const nx = dx / d, ny = dy / d, nz = dz / d;
+        p.x = c.x + nx * lim; p.y = c.y + ny * lim; p.z = c.z + nz * lim;
+        const vn = vel.x * nx + vel.y * ny + vel.z * nz;
+        if (vn < 0) { vel.x -= nx * vn * 1.5; vel.y -= ny * vn * 1.5; vel.z -= nz * vn * 1.5; }   // Rückprall
+        const outV = vel.x * nx + vel.y * ny + vel.z * nz;
+        if (outV < 4) { const add = 4 - outV; vel.x += nx * add; vel.y += ny * add; vel.z += nz * add; }   // Mindest-Wegstoß
+        impact = Math.max(impact, 4 + Math.max(0, -vn));      // → Kamera-Rütteln
+        bumped = true;
+      }
+      if (bumped && isSub && time - monCd > 1.5) { monCd = time; ev('monster-bump'); }
+    }
+
     // Schlot-Säulen (senkrechte Kapseln mit Kuppel)
     for (let i = 0; i < pillars.length; i++) {
       const P = pillars[i];
@@ -2148,6 +2257,7 @@ export function buildLevel3(scene, renderer) {
       M.halo.material.opacity = 0.18 + 0.08 * Math.sin(time * 2.6);
       M.phMat.color.setScalar(0.75 + 0.25 * Math.sin(time * 1.9));
       M.g.updateMatrixWorld(true);
+      refreshMonster();                                  // Kollisions-Kugeln mitführen
       M.bulb.getWorldPosition(_v);
       zMon.x = _v.x; zMon.y = _v.y; zMon.z = _v.z;
       zMon.mul = 0.85 + 0.15 * Math.sin(time * 2.6);
@@ -2230,6 +2340,7 @@ export function buildLevel3(scene, renderer) {
     for (let i = 0; i < schools.length; i++) updateSchool(schools[i], dt, cam);
     jellies.forEach((j) => {
       j.pos.set(j.base.x + Math.sin(time * 0.2 + j.ph) * 3, j.base.y + Math.sin(time * 0.5 + j.ph) * 2.5, j.base.z + Math.cos(time * 0.17 + j.ph) * 3);
+      avoidObs(j.pos, null, j.s * 1.4, 0);                 // Quallen driften um Felsen/Säulen herum
       const pulse = Math.sin(time * 2.0 + j.ph);
       j.bell.scale.set(j.s * (1 - pulse * 0.06), j.s * (0.8 + pulse * 0.16), j.s * (1 - pulse * 0.06));
       j.tent.scale.y = j.s * (1 - pulse * 0.1);
