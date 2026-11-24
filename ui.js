@@ -12,6 +12,11 @@
    Multiplayer-Leiste "DU: x € | Freund: y €",
    5-Sekunden-Steuerungs-Overlay (CrazyGames)
 
+   CrazyGames-Werbung (nur Anzeige – die Logik liegt in script.js):
+     Der Button "Watch Ad: +500 €" im Ergebnis-Screen ist standardmäßig unsichtbar
+     (display:none) und wird ausschließlich durch setAdsEnabled(true) sichtbar –
+     das ruft script.js nur auf, wenn das Spiel wirklich auf CrazyGames läuft.
+
    Menü-Screens (index.html):
      main · play · levels · multiplayer · mphost · mpjoin · settings
 
@@ -179,6 +184,9 @@ export const I18N = {
     owned: 'OWNED',
     resContinue: 'NEXT TOUR',
     resMenu: 'TO MENU',
+    adRewardBtn: 'Watch Ad: +500 €',
+    adRewardGot: '+500 € credited – thanks for watching!',
+    adNoAd: 'No ad available right now – try again later.',
     upGolden: 'Golden Heated Toilet Seat',
     upGoldenDesc: '+0.3 ★ bonus on every toilet trip',
     upFog: 'Fog Lights',
@@ -323,6 +331,9 @@ export const I18N = {
     owned: 'GEKAUFT',
     resContinue: 'NÄCHSTE TOUR',
     resMenu: 'ZUM MENÜ',
+    adRewardBtn: 'Werbung ansehen: +500 €',
+    adRewardGot: '+500 € gutgeschrieben – danke fürs Zuschauen!',
+    adNoAd: 'Gerade keine Werbung verfügbar – versuche es später noch einmal.',
     upGolden: 'Goldene Beheizte Klobrille',
     upGoldenDesc: '+0,3 ★ Bonus bei jedem WC-Gang',
     upFog: 'Nebelscheinwerfer',
@@ -467,6 +478,9 @@ export const I18N = {
     owned: 'ACHETÉ',
     resContinue: 'EXCURSION SUIVANTE',
     resMenu: 'AU MENU',
+    adRewardBtn: 'Regarder une pub : +500 €',
+    adRewardGot: '+500 € crédités – merci d’avoir regardé !',
+    adNoAd: 'Aucune publicité disponible pour le moment – réessayez plus tard.',
     upGolden: 'Siège de toilettes doré chauffant',
     upGoldenDesc: '+0,3 ★ de bonus à chaque passage aux toilettes',
     upFog: 'Phares antibrouillard',
@@ -611,6 +625,9 @@ export const I18N = {
     owned: 'GEKOCHT',
     resContinue: 'VOLGENDE TOUR',
     resMenu: 'NAAR MENU',
+    adRewardBtn: 'Reclame kijken: +500 €',
+    adRewardGot: '+500 € bijgeschreven – bedankt voor het kijken!',
+    adNoAd: 'Momenteel geen reclame beschikbaar – probeer het later opnieuw.',
     upGolden: 'Gouden verwarmde toiletbril',
     upGoldenDesc: '+0,3 ★ bonus bij elk toiletbezoek',
     upFog: 'Mistlampen',
@@ -755,6 +772,9 @@ export const I18N = {
     owned: 'KUPIONE',
     resContinue: 'NASTĘPNA WYCIECZKA',
     resMenu: 'DO MENU',
+    adRewardBtn: 'Obejrzyj reklamę: +500 €',
+    adRewardGot: '+500 € dodane – dzięki za obejrzenie!',
+    adNoAd: 'Brak dostępnej reklamy – spróbuj ponownie później.',
     upGolden: 'Złota podgrzewana deska klozetowa',
     upGoldenDesc: '+0,3 ★ premii za każdą wizytę w toalecie',
     upFog: 'Światła przeciwmgielne',
@@ -836,9 +856,37 @@ let mpLevel = 1;          // vom Host gewähltes Level
 let mpBarOn = false;      // Multiplayer-Leiste aktiv?
 let mpHintTimer = 0;
 
+/* CrazyGames-Werbung: Button nur sichtbar, wenn script.js setAdsEnabled(true) aufruft */
+let adsEnabled = false;
+let rewardedBusy = false;
+
 export function isMenuOpen() { return menuOpen || resultOpen; }
 export function isTouchDevice() {
   return ('ontouchstart' in window) || (navigator.maxTouchPoints || 0) > 0;
+}
+
+/* ---------- Werbung (CrazyGames): Rewarded-Button ---------- */
+function syncAdButton() {
+  const b = $('btn-rewarded');
+  if (!b) return;
+  // display:none = komplett unsichtbar und nicht anklickbar; '' = normales Button-Layout
+  b.style.display = adsEnabled ? '' : 'none';
+  b.classList.toggle('disabled', adsEnabled && rewardedBusy);
+}
+
+/* v = true NUR auf CrazyGames (wird von script.js gesteuert) */
+export function setAdsEnabled(v) {
+  adsEnabled = !!v;
+  if (!adsEnabled) rewardedBusy = false;
+  syncAdButton();
+}
+
+export function isAdsEnabled() { return adsEnabled; }
+
+/* Während die Werbung läuft: Button sperren */
+export function setRewardedBusy(v) {
+  rewardedBusy = !!v;
+  syncAdButton();
 }
 
 /* ---------- Level-Freischaltung ---------- */
@@ -1399,6 +1447,9 @@ function renderResult(s) {
     row.appendChild(ic); row.appendChild(info); row.appendChild(btn);
     list.appendChild(row);
   });
+
+  // Rewarded-Button: nur auf CrazyGames sichtbar
+  syncAdButton();
 }
 
 let resToastTimer = 0;
@@ -1408,6 +1459,12 @@ function showResultToast(text) {
   n.classList.add('show');
   clearTimeout(resToastTimer);
   resToastTimer = setTimeout(() => n.classList.remove('show'), 1800);
+}
+
+/* Meldung im Ergebnis-Screen (Text-Key oder fertiger Text) */
+export function showResultMessage(keyOrText) {
+  if (!resultOpen) return;
+  showResultToast(isKey(keyOrText) ? t(keyOrText) : keyOrText);
 }
 
 export function showResult(state) {
@@ -1420,12 +1477,13 @@ export function showResult(state) {
   startPadLoop();
 }
 
-/* Nach einem Kauf: neuen Stand anzeigen */
+/* Nach einem Kauf bzw. einer Belohnung: neuen Stand anzeigen */
 export function refreshResult(state) {
   if (!resultOpen) return;
   lastResult = Object.assign(lastResult || {}, state);
   renderResult(lastResult);
   if (state && state.bought) showResultToast(t('msgBought'));
+  else if (state && state.rewarded) showResultToast(t('adRewardGot'));
 }
 
 export function hideResult() {
@@ -1612,14 +1670,26 @@ export function initUI(callbacks) {
     if (cb.onOpenMenu) cb.onOpenMenu();
   });
 
+  /* Weiter / Menü: script.js blendet den Ergebnis-Screen selbst aus
+     (auf CrazyGames erst nach der Midgame-Werbung) */
   $('result-continue').addEventListener('click', () => {
-    hideResult();
     if (cb.onResultContinue) cb.onResultContinue();
+    else hideResult();
   });
   $('result-menu').addEventListener('click', () => {
-    hideResult();
     if (cb.onResultMenu) cb.onResultMenu();
+    else hideResult();
   });
+
+  /* Rewarded-Ad-Button: der Button selbst ist ohne CrazyGames per display:none versteckt */
+  const rewardedBtn = $('btn-rewarded');
+  if (rewardedBtn) {
+    rewardedBtn.addEventListener('click', () => {
+      if (!adsEnabled || rewardedBusy) return;
+      if (cb.onWatchRewarded) cb.onWatchRewarded();
+    });
+  }
+  syncAdButton();
 
   const slider = $('set-view');
   const sliderVal = $('set-view-val');
