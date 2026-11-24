@@ -4,6 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>BEYOND MARIANA – MARIANA TOURS</title>
+
+<!-- CrazyGames SDK v3: wird nur von script.js benutzt, wenn das Spiel wirklich auf CrazyGames läuft.
+     Auf der eigenen Website (beyondmarianaa.pages.dev) bleibt das SDK komplett ungenutzt. -->
+<script src="https://sdk.crazygames.com/crazygames-sdk-v3.js"></script>
+
 <style>
 :root{
  --cy:#19e6ff;--cy-dim:rgba(25,230,255,.38);
@@ -256,6 +261,12 @@ button{font-family:inherit;cursor:pointer;touch-action:manipulation}
 #result .actions2 .btn{flex:1;padding:13px 10px 13px 28px;font-size:13px}
 #result .actions2 .btn::after{left:10px}
 
+/* Rewarded-Ad-Button: standardmäßig per Inline-Style ausgeblendet (display:none),
+   wird nur auf CrazyGames von ui.js sichtbar geschaltet */
+#btn-rewarded{margin-top:8px;padding:13px 10px 13px 28px;font-size:13px;--edge:rgba(93,255,176,.55);color:var(--ok)}
+#btn-rewarded::after{left:10px;background:var(--ok);box-shadow:0 0 8px var(--ok)}
+#btn-rewarded:hover,#btn-rewarded:focus{--edge:var(--ok)}
+
 @media (max-width:640px){
  .dpad{width:150px;height:150px}.vert .tbtn{width:70px;height:70px}.actions .tbtn{width:70px;height:56px}
  .actions{right:calc(96px + env(safe-area-inset-right,0px));max-width:150px}
@@ -346,6 +357,11 @@ button{font-family:inherit;cursor:pointer;touch-action:manipulation}
     <div id="res-level" class="res-level"></div>
     <h3 data-i18n="shopTitle">UPGRADE SHOP</h3>
     <div id="shop-list"></div>
+
+    <!-- Rewarded Ad (+500 €): bleibt auf der eigenen Website komplett unsichtbar (display:none) –
+         nur auf CrazyGames macht ui.js ihn sichtbar -->
+    <button id="btn-rewarded" class="btn cut" type="button" style="display:none" data-i18n="adRewardBtn">Watch Ad: +500 €</button>
+
     <div class="actions2">
       <button id="result-continue" class="btn cut primary" type="button" data-i18n="resContinue">NEXT TOUR</button>
       <button id="result-menu" class="btn cut" type="button" data-i18n="resMenu">TO MENU</button>
